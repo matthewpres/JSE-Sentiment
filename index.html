@@ -2,169 +2,105 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JSE Sentiment Analysis</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            margin: 40px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            max-width: 800px;
+            max-width: 600px;
             margin: 0 auto;
-            background: white;
             padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        input {
+        .form-container {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .form-container input {
+            flex-grow: 1;
             padding: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            margin-right: 10px;
         }
-        .add-ticker-btn {
-            padding: 8px 16px;
-            background: #0066cc;
+        .form-container button {
+            padding: 8px 15px;
+            background-color: #007bff;
             color: white;
             border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        .remove-btn {
-            padding: 8px 16px;
-            background: #dc3545;
-            color: white;
-            border: none;
-            border-radius: 4px;
             cursor: pointer;
         }
         table {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
         }
         th, td {
-            padding: 12px;
+            border: 1px solid #ddd;
+            padding: 8px;
             text-align: left;
-            border-bottom: 1px solid #ddd;
         }
-        .clickable {
-            cursor: pointer;
-            color: #0066cc;
-            text-decoration: underline;
+        th {
+            background-color: #f2f2f2;
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <h1>JSE Sentiment Analysis</h1>
-        
-        <div>
-            <input type="text" id="tickerInput" placeholder="Enter stock ticker (e.g., ECL)" oninput="this.value = this.value.toUpperCase()">
-            <button class="add-ticker-btn" onclick="handleAddTicker()">Add Ticker</button>
-        </div>
-
-        <div style="margin-top: 10px; color: #666;">
-            Market prices are updated daily around 3 PM. Previous day's prices are shown until new data is available.
-        </div>
-
-        <table>
-            <thead>
-                <tr>
-                    <th>Ticker</th>
-                    <th>Current Price ($)</th>
-                    <th>Predictions</th>
-                    <th>Action</th>
-                </tr>
-            </thead>
-            <tbody id="tickerTableBody"></tbody>
-        </table>
-
-        <!-- Prediction Modal -->
-        <div id="predictionForm" style="display:none; margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
-            <h3>Add 1-Year Price Prediction for <span id="selectedTicker"></span></h3>
-            <div>
-                <label>Current Price: $<span id="currentPrice"></span></label><br><br>
-                <label>Your 1-Year Target Price ($):</label><br>
-                <input type="number" id="predictionInput" step="0.01" style="margin: 10px 0;">
-                <button class="add-ticker-btn" onclick="submitPrediction()">Submit Prediction</button>
-            </div>
-        </div>
+    <h2>JSE Sentiment Analysis</h2>
+    <div class="form-container">
+        <input type="text" id="tickerInput" placeholder="Enter Stock Ticker (e.g. ECL)">
+        <input type="number" id="priceInput" placeholder="1-Year Price Prediction ($)">
+        <button onclick="addPrediction()">Submit Prediction</button>
     </div>
 
+    <table id="predictionsTable">
+        <thead>
+            <tr>
+                <th>Ticker</th>
+                <th>Current Price ($)</th>
+                <th>1-Year Predictions</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody id="predictionsBody">
+            <!-- Predictions will be added here dynamically -->
+        </tbody>
+    </table>
+
     <script>
-        const stockData = {
-            'ECL': { currentPrice: 3.27, predictions: [] },
-            '138SL': { currentPrice: 4.07, predictions: [] }
-            // Add more stocks as needed
-        };
+        function addPrediction() {
+            const tickerInput = document.getElementById('tickerInput');
+            const priceInput = document.getElementById('priceInput');
+            const predictionsBody = document.getElementById('predictionsBody');
 
-        let selectedTickerSymbol = null;
-
-        function handleAddTicker() {
-            const ticker = document.getElementById('tickerInput').value.trim().toUpperCase();
-            if (!ticker) {
-                alert('Please enter a ticker symbol');
+            // Validate inputs
+            if (!tickerInput.value || !priceInput.value) {
+                alert('Please enter both a ticker and a price prediction');
                 return;
             }
-            if (!stockData[ticker]) {
-                alert('Ticker not found');
-                return;
-            }
-            addTickerToTable(ticker);
-            document.getElementById('tickerInput').value = '';
-        }
 
-        function addTickerToTable(ticker) {
-            const tbody = document.getElementById('tickerTableBody');
-            const row = document.createElement('tr');
-            row.innerHTML = `
-                <td class="clickable" onclick="showPredictionForm('${ticker}')">${ticker}</td>
-                <td>$${stockData[ticker].currentPrice.toFixed(2)}</td>
-                <td>${stockData[ticker].predictions.length} predictions</td>
-                <td><button class="remove-btn" onclick="removeTicker(this)">Remove</button></td>
-            `;
-            tbody.appendChild(row);
-        }
-
-        function showPredictionForm(ticker) {
-            selectedTickerSymbol = ticker;
-            document.getElementById('selectedTicker').textContent = ticker;
-            document.getElementById('currentPrice').textContent = stockData[ticker].currentPrice.toFixed(2);
-            document.getElementById('predictionInput').value = '';
-            document.getElementById('predictionForm').style.display = 'block';
-        }
-
-        function submitPrediction() {
-            const prediction = parseFloat(document.getElementById('predictionInput').value);
-            if (!prediction) {
-                alert('Please enter a valid prediction');
-                return;
-            }
+            // Create new row
+            const newRow = predictionsBody.insertRow();
             
-            stockData[selectedTickerSymbol].predictions.push({
-                value: prediction,
-                date: new Date()
-            });
+            // Ticker cell
+            const tickerCell = newRow.insertCell(0);
+            tickerCell.textContent = tickerInput.value.toUpperCase();
 
-            updateTable();
-            document.getElementById('predictionForm').style.display = 'none';
-        }
+            // Current Price cell (placeholder - would typically fetch real-time data)
+            const currentPriceCell = newRow.insertCell(1);
+            currentPriceCell.textContent = 'Fetching...';
 
-        function removeTicker(button) {
-            button.closest('tr').remove();
-        }
+            // Prediction cell
+            const predictionCell = newRow.insertCell(2);
+            predictionCell.textContent = `$${parseFloat(priceInput.value).toFixed(2)}`;
 
-        function updateTable() {
-            const tbody = document.getElementById('tickerTableBody');
-            tbody.innerHTML = '';
-            Object.keys(stockData).forEach(ticker => {
-                if (document.querySelector(`td:contains('${ticker}')`)) {
-                    addTickerToTable(ticker);
-                }
-            });
+            // Action cell
+            const actionCell = newRow.insertCell(3);
+            const deleteButton = document.createElement('button');
+            deleteButton.textContent = 'Delete';
+            deleteButton.onclick = function() {
+                predictionsBody.deleteRow(newRow.rowIndex - 1);
+            };
+            actionCell.appendChild(deleteButton);
+
+            // Clear inputs
+            tickerInput.value = '';
+            priceInput.value = '';
         }
     </script>
 </body>
