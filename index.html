@@ -8,9 +8,13 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide-react@0.263.1"></script>
 </head>
 <body>
     <div id="root"></div>
-    <script type="text/babel" src="src/App.js"></script>
+    <script type="text/babel" src="src/components/StockPrediction.js"></script>
+    <script type="text/babel">
+        ReactDOM.render(<StockPrediction />, document.getElementById('root'));
+    </script>
 </body>
 </html>
