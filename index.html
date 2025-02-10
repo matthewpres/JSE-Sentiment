@@ -39,15 +39,26 @@
         button:hover {
             background: #0052a3;
         }
-        #results {
+        table {
+            width: 100%;
+            border-collapse: collapse;
             margin-top: 20px;
         }
-        .stock-card {
-            border: 1px solid #ddd;
-            padding: 15px;
+        th, td {
+            padding: 12px;
+            text-align: left;
+            border-bottom: 1px solid #ddd;
+        }
+        th {
+            background-color: #f8f8f8;
+        }
+        .note {
             margin-top: 20px;
+            padding: 10px;
+            background-color: #fff3cd;
+            border: 1px solid #ffeeba;
             border-radius: 4px;
-            display: none;
+            color: #856404;
         }
     </style>
 </head>
@@ -55,37 +66,93 @@
     <div class="container">
         <h1>JSE Sentiment Analysis</h1>
         <div class="search-form">
-            <input type="text" id="stockInput" placeholder="Enter stock symbol (e.g., ECL)" oninput="this.value = this.value.toUpperCase()">
-            <button onclick="searchStock()">Search</button>
+            <input type="text" id="tickerInput" placeholder="Enter stock ticker (e.g., ECL)" oninput="this.value = this.value.toUpperCase()">
+            <button onclick="addTicker()">Add Ticker</button>
         </div>
-        <div id="results">
-            <div class="stock-card" id="stockInfo">
-                <h2 id="stockName"></h2>
-                <p>Current Price: $<span id="currentPrice"></span></p>
-                <p>Market Sentiment: <span id="sentiment"></span></p>
-            </div>
+
+        <div class="note">
+            Price data will be updated daily from Mayberry's trade sheet at approximately 3 PM.
         </div>
+
+        <table id="tickerTable">
+            <thead>
+                <tr>
+                    <th>Ticker</th>
+                    <th>Date Added</th>
+                    <th>Current Price</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="tickerTableBody">
+                <!-- Tickers will be added here -->
+            </tbody>
+        </table>
     </div>
 
     <script>
-        const mockStocks = {
-            'ECL': { name: 'Express Catering Limited', price: 3.00 },
-            '138SL': { name: '138 Student Living', price: 3.50 }
+        // Load saved tickers from localStorage when page loads
+        window.onload = function() {
+            const savedTickers = JSON.parse(localStorage.getItem('tickers') || '[]');
+            savedTickers.forEach(ticker => addTickerToTable(ticker));
         };
 
-        function searchStock() {
-            const symbol = document.getElementById('stockInput').value;
-            const stockInfo = document.getElementById('stockInfo');
-            const stockName = document.getElementById('stockName');
-            const currentPrice = document.getElementById('currentPrice');
+        function addTicker() {
+            const tickerInput = document.getElementById('tickerInput');
+            const ticker = tickerInput.value.trim().toUpperCase();
             
-            if (mockStocks[symbol]) {
-                stockName.textContent = `${symbol} - ${mockStocks[symbol].name}`;
-                currentPrice.textContent = mockStocks[symbol].price.toFixed(2);
-                stockInfo.style.display = 'block';
-            } else {
-                alert('Stock not found. Please try another symbol.');
+            if (!ticker) {
+                alert('Please enter a ticker symbol');
+                return;
             }
+
+            // Check if ticker already exists
+            const existingTickers = Array.from(document.querySelectorAll('td:first-child'))
+                                       .map(td => td.textContent);
+            if (existingTickers.includes(ticker)) {
+                alert('This ticker is already in the list');
+                return;
+            }
+
+            addTickerToTable({
+                symbol: ticker,
+                dateAdded: new Date().toISOString(),
+                price: 'Pending' // Will be updated from Mayberry data
+            });
+
+            // Save to localStorage
+            saveTickers();
+            
+            // Clear input
+            tickerInput.value = '';
+        }
+
+        function addTickerToTable(ticker) {
+            const tbody = document.getElementById('tickerTableBody');
+            const row = tbody.insertRow();
+            
+            row.insertCell(0).textContent = ticker.symbol;
+            row.insertCell(1).textContent = new Date(ticker.dateAdded).toLocaleDateString();
+            row.insertCell(2).textContent = ticker.price;
+            
+            const deleteButton = document.createElement('button');
+            deleteButton.textContent = 'Remove';
+            deleteButton.style.backgroundColor = '#dc3545';
+            deleteButton.onclick = function() {
+                row.remove();
+                saveTickers();
+            };
+            
+            row.insertCell(3).appendChild(deleteButton);
+        }
+
+        function saveTickers() {
+            const tickers = Array.from(document.querySelectorAll('#tickerTableBody tr')).map(row => ({
+                symbol: row.cells[0].textContent,
+                dateAdded: new Date(row.cells[1].textContent).toISOString(),
+                price: row.cells[2].textContent
+            }));
+            
+            localStorage.setItem('tickers', JSON.stringify(tickers));
         }
     </script>
 </body>
