@@ -4,17 +4,36 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JSE Sentiment Analysis</title>
-    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
-    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <!-- Add React and ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    <!-- Add Babel -->
     <script src="https://unpkg.com/babel-standalone@6/babel.min.js"></script>
+    <!-- Add Tailwind -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <script src="https://unpkg.com/lucide-react@0.263.1"></script>
 </head>
 <body>
     <div id="root"></div>
-    <script type="text/babel" src="src/components/StockPrediction.js"></script>
+    <!-- Make sure the path matches your file structure exactly -->
     <script type="text/babel">
-        ReactDOM.render(<StockPrediction />, document.getElementById('root'));
+        const mockStockData = {
+            "138SL": { ticker: "138SL", companyName: "138 Student Living", closingPrice: 3.50 },
+            "ECL": { ticker: "ECL", companyName: "Express Catering Limited", closingPrice: 3.00 }
+        };
+
+        const StockPrediction = () => {
+            const [predictions, setPredictions] = React.useState([]);
+            const [marketData, setMarketData] = React.useState(null);
+            const [targetPrice, setTargetPrice] = React.useState('');
+            const [reasoning, setReasoning] = React.useState('');
+            const [symbol, setSymbol] = React.useState('');
+            const [error, setError] = React.useState('');
+
+            // ... rest of your component code ...
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<StockPrediction />);
     </script>
 </body>
 </html>
