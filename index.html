@@ -6,20 +6,20 @@
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 600px;
+            max-width: 800px;
             margin: 0 auto;
             padding: 20px;
         }
-        .form-container {
+        .input-container {
             display: flex;
             gap: 10px;
             margin-bottom: 20px;
         }
-        .form-container input {
+        .input-container input {
             flex-grow: 1;
             padding: 8px;
         }
-        .form-container button {
+        .input-container button {
             padding: 8px 15px;
             background-color: #007bff;
             color: white;
@@ -38,14 +38,29 @@
         th {
             background-color: #f2f2f2;
         }
+        .positive {
+            color: green;
+        }
+        .negative {
+            color: red;
+        }
     </style>
 </head>
 <body>
     <h2>JSE Sentiment Analysis</h2>
-    <div class="form-container">
+    
+    <div class="input-container">
         <input type="text" id="tickerInput" placeholder="Enter Stock Ticker (e.g. ECL)">
-        <input type="number" id="priceInput" placeholder="1-Year Price Prediction ($)">
-        <button onclick="addPrediction()">Submit Prediction</button>
+        <button onclick="addTicker()">Add Ticker</button>
+    </div>
+
+    <div id="predictionSection" style="display: none;">
+        <h3>Add 1-Year Price Prediction for <span id="selectedTicker"></span></h3>
+        <p>Current Price: $<span id="currentPrice"></span></p>
+        <div class="input-container">
+            <input type="number" id="priceInput" placeholder="Your 1-Year Target Price ($)">
+            <button onclick="submitPrediction()">Submit Prediction</button>
+        </div>
     </div>
 
     <table id="predictionsTable">
@@ -53,7 +68,8 @@
             <tr>
                 <th>Ticker</th>
                 <th>Current Price ($)</th>
-                <th>1-Year Predictions</th>
+                <th>Prediction Price ($)</th>
+                <th>Potential Upside/Downside (%)</th>
                 <th>Action</th>
             </tr>
         </thead>
@@ -63,34 +79,76 @@
     </table>
 
     <script>
-        function addPrediction() {
-            const tickerInput = document.getElementById('tickerInput');
-            const priceInput = document.getElementById('priceInput');
-            const predictionsBody = document.getElementById('predictionsBody');
+        let currentTickerData = null;
 
-            // Validate inputs
-            if (!tickerInput.value || !priceInput.value) {
-                alert('Please enter both a ticker and a price prediction');
+        function addTicker() {
+            const tickerInput = document.getElementById('tickerInput');
+            const ticker = tickerInput.value.toUpperCase();
+            
+            if (!ticker) {
+                alert('Please enter a stock ticker');
                 return;
             }
 
-            // Create new row
+            // Simulate fetching current price (in a real app, this would be an API call)
+            const currentPrice = (Math.random() * 100).toFixed(2);
+            
+            // Store current ticker data
+            currentTickerData = {
+                ticker: ticker,
+                currentPrice: parseFloat(currentPrice)
+            };
+
+            // Update UI
+            document.getElementById('selectedTicker').textContent = ticker;
+            document.getElementById('currentPrice').textContent = currentPrice;
+            document.getElementById('predictionSection').style.display = 'block';
+            
+            // Clear ticker input
+            tickerInput.value = '';
+        }
+
+        function submitPrediction() {
+            if (!currentTickerData) {
+                alert('Please add a ticker first');
+                return;
+            }
+
+            const priceInput = document.getElementById('priceInput');
+            const predictionPrice = parseFloat(priceInput.value);
+
+            if (!predictionPrice) {
+                alert('Please enter a valid prediction price');
+                return;
+            }
+
+            // Calculate potential upside/downside
+            const currentPrice = currentTickerData.currentPrice;
+            const upsideDownside = ((predictionPrice - currentPrice) / currentPrice * 100).toFixed(2);
+
+            // Create new row in predictions table
+            const predictionsBody = document.getElementById('predictionsBody');
             const newRow = predictionsBody.insertRow();
             
             // Ticker cell
             const tickerCell = newRow.insertCell(0);
-            tickerCell.textContent = tickerInput.value.toUpperCase();
+            tickerCell.textContent = currentTickerData.ticker;
 
-            // Current Price cell (placeholder - would typically fetch real-time data)
+            // Current Price cell
             const currentPriceCell = newRow.insertCell(1);
-            currentPriceCell.textContent = 'Fetching...';
+            currentPriceCell.textContent = `$${currentPrice.toFixed(2)}`;
 
-            // Prediction cell
-            const predictionCell = newRow.insertCell(2);
-            predictionCell.textContent = `$${parseFloat(priceInput.value).toFixed(2)}`;
+            // Prediction Price cell
+            const predictionPriceCell = newRow.insertCell(2);
+            predictionPriceCell.textContent = `$${predictionPrice.toFixed(2)}`;
+
+            // Upside/Downside cell
+            const upsideDownsideCell = newRow.insertCell(3);
+            upsideDownsideCell.textContent = `${upsideDownside}%`;
+            upsideDownsideCell.classList.add(upsideDownside >= 0 ? 'positive' : 'negative');
 
             // Action cell
-            const actionCell = newRow.insertCell(3);
+            const actionCell = newRow.insertCell(4);
             const deleteButton = document.createElement('button');
             deleteButton.textContent = 'Delete';
             deleteButton.onclick = function() {
@@ -98,9 +156,10 @@
             };
             actionCell.appendChild(deleteButton);
 
-            // Clear inputs
-            tickerInput.value = '';
+            // Reset inputs and hide prediction section
             priceInput.value = '';
+            document.getElementById('predictionSection').style.display = 'none';
+            currentTickerData = null;
         }
     </script>
 </body>
