@@ -18,6 +18,29 @@
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input {
+            padding: 8px;
+            width: 200px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        button {
+            padding: 8px 16px;
+            background: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
         table {
             width: 100%;
             border-collapse: collapse;
@@ -28,42 +51,34 @@
             text-align: left;
             border-bottom: 1px solid #ddd;
         }
-        button {
-            padding: 8px 16px;
-            background: #0066cc;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        input {
-            padding: 8px;
-            margin-right: 8px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>JSE Sentiment Analysis</h1>
-        
-        <div>
-            <input type="text" id="tickerInput" placeholder="Enter stock ticker (e.g., ECL)" oninput="this.value = this.value.toUpperCase()">
+
+        <div class="input-group">
+            <label>Enter Stock Ticker:</label>
+            <input type="text" id="tickerInput" placeholder="e.g., ECL" oninput="this.value = this.value.toUpperCase()">
             <button onclick="handleAddTicker()">Add Ticker</button>
         </div>
 
-        <div style="margin-top: 10px; color: #666;">
-            Market prices are updated daily around 3 PM. Previous day's prices are shown until new data is available.
+        <div class="input-group">
+            <label>Enter Your 1-Year Price Prediction ($):</label>
+            <input type="number" id="predictionInput" step="0.01" placeholder="e.g., 5.00">
+            <button onclick="handleAddPrediction()">Submit Prediction</button>
         </div>
 
-        <table id="tickerTable">
+        <div style="margin: 20px 0; color: #666;">
+            Market prices update daily around 3 PM. Previous day's prices shown until new data is available.
+        </div>
+
+        <table>
             <thead>
                 <tr>
                     <th>Ticker</th>
                     <th>Current Price ($)</th>
-                    <th>Price Change</th>
-                    <th>Date Added</th>
+                    <th>1-Year Predictions</th>
                     <th>Action</th>
                 </tr>
             </thead>
@@ -72,17 +87,14 @@
     </div>
 
     <script>
-        // Stock data from Mayberry trade sheet
         const stockData = {
-            '138SL': { currentPrice: 4.07, previousPrice: 6.07 },
-            'ECL': { currentPrice: 3.27, previousPrice: 3.22 },
-            'FTNA': { currentPrice: 9.21, previousPrice: 9.11 },
-            // Add more stocks as needed
+            '138SL': { currentPrice: 4.07, predictions: [] },
+            'ECL': { currentPrice: 3.27, predictions: [] },
+            'FTNA': { currentPrice: 9.21, predictions: [] }
         };
 
         function handleAddTicker() {
-            const tickerInput = document.getElementById('tickerInput');
-            const ticker = tickerInput.value.trim().toUpperCase();
+            const ticker = document.getElementById('tickerInput').value.trim().toUpperCase();
             
             if (!ticker) {
                 alert('Please enter a ticker symbol');
@@ -90,66 +102,65 @@
             }
 
             if (!stockData[ticker]) {
-                alert('Ticker not found in current market data');
+                alert('Ticker not found');
                 return;
             }
 
-            const existingTickers = Array.from(document.querySelectorAll('#tickerTableBody tr'))
-                .map(row => row.cells[0].textContent);
+            addTickerToTable(ticker);
+            document.getElementById('tickerInput').value = '';
+        }
+
+        function handleAddPrediction() {
+            const prediction = document.getElementById('predictionInput').value;
+            const ticker = document.getElementById('tickerInput').value.trim().toUpperCase();
             
-            if (existingTickers.includes(ticker)) {
-                alert('This ticker is already in the list');
+            if (!ticker || !stockData[ticker]) {
+                alert('Please enter a valid ticker first');
                 return;
             }
 
-            addTickerToTable({
-                symbol: ticker,
-                dateAdded: new Date().toISOString()
+            if (!prediction) {
+                alert('Please enter a prediction');
+                return;
+            }
+
+            stockData[ticker].predictions.push({
+                price: parseFloat(prediction),
+                date: new Date()
             });
 
-            tickerInput.value = '';
-            saveTickers();
+            updateTable();
+            document.getElementById('predictionInput').value = '';
         }
 
         function addTickerToTable(ticker) {
             const tbody = document.getElementById('tickerTableBody');
-            const row = tbody.insertRow();
+            const row = document.createElement('tr');
             
-            row.insertCell(0).textContent = ticker.symbol;
-            row.insertCell(1).textContent = stockData[ticker.symbol].currentPrice.toFixed(2);
+            row.innerHTML = `
+                <td>${ticker}</td>
+                <td>$${stockData[ticker].currentPrice.toFixed(2)}</td>
+                <td>${stockData[ticker].predictions.length} predictions</td>
+                <td><button onclick="removeTicker(this)" style="background-color: #dc3545;">Remove</button></td>
+            `;
             
-            const priceChange = stockData[ticker.symbol].currentPrice - stockData[ticker.symbol].previousPrice;
-            const changeCell = row.insertCell(2);
-            changeCell.textContent = priceChange >= 0 ? `+${priceChange.toFixed(2)}` : priceChange.toFixed(2);
-            changeCell.style.color = priceChange >= 0 ? '#22c55e' : '#ef4444';
-            
-            row.insertCell(3).textContent = new Date(ticker.dateAdded).toLocaleDateString();
-            
-            const deleteButton = document.createElement('button');
-            deleteButton.textContent = 'Remove';
-            deleteButton.style.backgroundColor = '#dc3545';
-            deleteButton.onclick = function() {
-                row.remove();
-                saveTickers();
-            };
-            
-            row.insertCell(4).appendChild(deleteButton);
+            tbody.appendChild(row);
         }
 
-        function saveTickers() {
-            const tickers = Array.from(document.querySelectorAll('#tickerTableBody tr')).map(row => ({
-                symbol: row.cells[0].textContent,
-                dateAdded: new Date().toLocaleString()
-            }));
-            
-            localStorage.setItem('tickers', JSON.stringify(tickers));
+        function removeTicker(button) {
+            button.closest('tr').remove();
         }
 
-        // Load saved tickers when page loads
-        window.onload = function() {
-            const savedTickers = JSON.parse(localStorage.getItem('tickers') || '[]');
-            savedTickers.forEach(ticker => addTickerToTable(ticker));
-        };
+        function updateTable() {
+            const tbody = document.getElementById('tickerTableBody');
+            tbody.innerHTML = '';
+            
+            Object.keys(stockData).forEach(ticker => {
+                if (tbody.querySelector(`td:first-child:contains('${ticker}')`)) {
+                    addTickerToTable(ticker);
+                }
+            });
+        }
     </script>
 </body>
 </html>
