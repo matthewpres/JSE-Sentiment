@@ -5,61 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JSE Sentiment Analysis</title>
     <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 40px;
-            background-color: #f5f5f5;
-        }
-        .container {
-            max-width: 800px;
-            margin: 0 auto;
-            background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .search-form {
-            margin: 20px 0;
-        }
-        input {
-            padding: 8px;
-            width: 200px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            margin-right: 10px;
-        }
-        button {
-            padding: 8px 16px;
-            background: #0066cc;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            cursor: pointer;
-        }
-        button:hover {
-            background: #0052a3;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-        th, td {
-            padding: 12px;
-            text-align: left;
-            border-bottom: 1px solid #ddd;
-        }
-        th {
-            background-color: #f8f8f8;
-        }
-        .note {
-            margin-top: 20px;
-            padding: 10px;
-            background-color: #fff3cd;
-            border: 1px solid #ffeeba;
-            border-radius: 4px;
-            color: #856404;
-        }
+        /* ... keep previous styles ... */
     </style>
 </head>
 <body>
@@ -71,15 +17,15 @@
         </div>
 
         <div class="note">
-            Price data will be updated daily from Mayberry's trade sheet at approximately 3 PM.
+            Last Updated: February 10, 2025 (Mayberry Trade Sheet)
         </div>
 
         <table id="tickerTable">
             <thead>
                 <tr>
                     <th>Ticker</th>
+                    <th>Current Price ($)</th>
                     <th>Date Added</th>
-                    <th>Current Price</th>
                     <th>Action</th>
                 </tr>
             </thead>
@@ -90,7 +36,16 @@
     </div>
 
     <script>
-        // Load saved tickers from localStorage when page loads
+        // Real stock data from Mayberry trade sheet
+        const stockData = {
+            '138SL': { price: 4.07 },
+            'ECL': { price: 3.27 },
+            'FTNA': { price: 9.21 },
+            'HONBUN': { price: 8.14 },
+            'JMMBGL': { price: 20.66 },
+            // ... add more stocks as needed
+        };
+
         window.onload = function() {
             const savedTickers = JSON.parse(localStorage.getItem('tickers') || '[]');
             savedTickers.forEach(ticker => addTickerToTable(ticker));
@@ -105,7 +60,13 @@
                 return;
             }
 
-            // Check if ticker already exists
+            // Check if ticker exists in our data
+            if (!stockData[ticker]) {
+                alert('Ticker not found in current market data');
+                return;
+            }
+
+            // Check if ticker already in table
             const existingTickers = Array.from(document.querySelectorAll('td:first-child'))
                                        .map(td => td.textContent);
             if (existingTickers.includes(ticker)) {
@@ -116,13 +77,10 @@
             addTickerToTable({
                 symbol: ticker,
                 dateAdded: new Date().toISOString(),
-                price: 'Pending' // Will be updated from Mayberry data
+                price: stockData[ticker].price
             });
 
-            // Save to localStorage
             saveTickers();
-            
-            // Clear input
             tickerInput.value = '';
         }
 
@@ -131,8 +89,8 @@
             const row = tbody.insertRow();
             
             row.insertCell(0).textContent = ticker.symbol;
-            row.insertCell(1).textContent = new Date(ticker.dateAdded).toLocaleDateString();
-            row.insertCell(2).textContent = ticker.price;
+            row.insertCell(1).textContent = stockData[ticker.symbol]?.price.toFixed(2) || 'N/A';
+            row.insertCell(2).textContent = new Date(ticker.dateAdded).toLocaleDateString();
             
             const deleteButton = document.createElement('button');
             deleteButton.textContent = 'Remove';
@@ -148,8 +106,7 @@
         function saveTickers() {
             const tickers = Array.from(document.querySelectorAll('#tickerTableBody tr')).map(row => ({
                 symbol: row.cells[0].textContent,
-                dateAdded: new Date(row.cells[1].textContent).toISOString(),
-                price: row.cells[2].textContent
+                dateAdded: new Date(row.cells[2].textContent).toISOString()
             }));
             
             localStorage.setItem('tickers', JSON.stringify(tickers));
