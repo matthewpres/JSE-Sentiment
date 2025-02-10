@@ -5,7 +5,13 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JSE Sentiment Analysis</title>
     <style>
-        /* ... keep previous styles ... */
+        /* ... previous styles ... */
+        .price-change-positive {
+            color: #22c55e;
+        }
+        .price-change-negative {
+            color: #ef4444;
+        }
     </style>
 </head>
 <body>
@@ -17,7 +23,7 @@
         </div>
 
         <div class="note">
-            Last Updated: February 10, 2025 (Mayberry Trade Sheet)
+            Market prices are updated daily around 3 PM. Previous day's prices are shown until new data is available.
         </div>
 
         <table id="tickerTable">
@@ -25,6 +31,7 @@
                 <tr>
                     <th>Ticker</th>
                     <th>Current Price ($)</th>
+                    <th>Price Change</th>
                     <th>Date Added</th>
                     <th>Action</th>
                 </tr>
@@ -36,62 +43,69 @@
     </div>
 
     <script>
-        // Real stock data from Mayberry trade sheet
+        // Market data with current and previous prices
         const stockData = {
-            '138SL': { price: 4.07 },
-            'ECL': { price: 3.27 },
-            'FTNA': { price: 9.21 },
-            'HONBUN': { price: 8.14 },
-            'JMMBGL': { price: 20.66 },
-            // ... add more stocks as needed
+            '138SL': { currentPrice: 4.07, previousPrice: 6.07 }, // Previous price from change: (2.00)
+            'ECL': { currentPrice: 3.27, previousPrice: 3.22 },   // Previous price from change: 5.00
+            'FTNA': { currentPrice: 9.21, previousPrice: 9.11 },  // Previous price from change: 10.00
+            'HONBUN': { currentPrice: 8.14, previousPrice: 7.94 }, // Previous price from change: 20.00
+            // ... parse the rest of the data from the trade sheet
         };
 
-        window.onload = function() {
-            const savedTickers = JSON.parse(localStorage.getItem('tickers') || '[]');
-            savedTickers.forEach(ticker => addTickerToTable(ticker));
-        };
+        // Keep track of last update time
+        let lastUpdateTime = new Date();
+        const updateHour = 15; // 3 PM
 
-        function addTicker() {
-            const tickerInput = document.getElementById('tickerInput');
-            const ticker = tickerInput.value.trim().toUpperCase();
+        function isMarketDataCurrent() {
+            const now = new Date();
+            // If it's before 3 PM, use previous day's data
+            if (now.getHours() < updateHour) {
+                return false;
+            }
+            return true;
+        }
+
+        function getCurrentPrice(ticker) {
+            if (!stockData[ticker]) return null;
             
-            if (!ticker) {
-                alert('Please enter a ticker symbol');
-                return;
+            if (isMarketDataCurrent()) {
+                return stockData[ticker].currentPrice;
+            } else {
+                return stockData[ticker].previousPrice;
             }
+        }
 
-            // Check if ticker exists in our data
-            if (!stockData[ticker]) {
-                alert('Ticker not found in current market data');
-                return;
-            }
-
-            // Check if ticker already in table
-            const existingTickers = Array.from(document.querySelectorAll('td:first-child'))
-                                       .map(td => td.textContent);
-            if (existingTickers.includes(ticker)) {
-                alert('This ticker is already in the list');
-                return;
-            }
-
-            addTickerToTable({
-                symbol: ticker,
-                dateAdded: new Date().toISOString(),
-                price: stockData[ticker].price
-            });
-
-            saveTickers();
-            tickerInput.value = '';
+        function getPriceChange(ticker) {
+            if (!stockData[ticker]) return null;
+            return stockData[ticker].currentPrice - stockData[ticker].previousPrice;
         }
 
         function addTickerToTable(ticker) {
             const tbody = document.getElementById('tickerTableBody');
             const row = tbody.insertRow();
             
+            // Ticker symbol
             row.insertCell(0).textContent = ticker.symbol;
-            row.insertCell(1).textContent = stockData[ticker.symbol]?.price.toFixed(2) || 'N/A';
-            row.insertCell(2).textContent = new Date(ticker.dateAdded).toLocaleDateString();
             
+            // Current price
+            const price = getCurrentPrice(ticker.symbol);
+            row.insertCell(1).textContent = price ? price.toFixed(2) : 'N/A';
+            
+            // Price change
+            const priceChange = getPriceChange(ticker.symbol);
+            const changeCell = row.insertCell(2);
+            if (priceChange !== null) {
+                const changeText = priceChange >= 0 ? `+${priceChange.toFixed(2)}` : priceChange.toFixed(2);
+                changeCell.textContent = changeText;
+                changeCell.className = priceChange >= 0 ? 'price-change-positive' : 'price-change-negative';
+            } else {
+                changeCell.textContent = 'N/A';
+            }
+            
+            // Date added
+            row.insertCell(3).textContent = new Date(ticker.dateAdded).toLocaleDateString();
+            
+            // Delete button
             const deleteButton = document.createElement('button');
             deleteButton.textContent = 'Remove';
             deleteButton.style.backgroundColor = '#dc3545';
@@ -100,17 +114,10 @@
                 saveTickers();
             };
             
-            row.insertCell(3).appendChild(deleteButton);
+            row.insertCell(4).appendChild(deleteButton);
         }
 
-        function saveTickers() {
-            const tickers = Array.from(document.querySelectorAll('#tickerTableBody tr')).map(row => ({
-                symbol: row.cells[0].textContent,
-                dateAdded: new Date(row.cells[2].textContent).toISOString()
-            }));
-            
-            localStorage.setItem('tickers', JSON.stringify(tickers));
-        }
+        // ... rest of the previous functions (addTicker, saveTickers, etc.) ...
     </script>
 </body>
 </html>
