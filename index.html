@@ -18,24 +18,23 @@
             border-radius: 8px;
             box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        .input-group {
-            margin-bottom: 15px;
-        }
-        label {
-            display: block;
-            margin-bottom: 5px;
-            font-weight: bold;
-        }
         input {
             padding: 8px;
-            width: 200px;
             border: 1px solid #ddd;
             border-radius: 4px;
             margin-right: 10px;
         }
-        button {
+        .add-ticker-btn {
             padding: 8px 16px;
             background: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .remove-btn {
+            padding: 8px 16px;
+            background: #dc3545;
             color: white;
             border: none;
             border-radius: 4px;
@@ -51,26 +50,24 @@
             text-align: left;
             border-bottom: 1px solid #ddd;
         }
+        .clickable {
+            cursor: pointer;
+            color: #0066cc;
+            text-decoration: underline;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>JSE Sentiment Analysis</h1>
-
-        <div class="input-group">
-            <label>Enter Stock Ticker:</label>
-            <input type="text" id="tickerInput" placeholder="e.g., ECL" oninput="this.value = this.value.toUpperCase()">
-            <button onclick="handleAddTicker()">Add Ticker</button>
+        
+        <div>
+            <input type="text" id="tickerInput" placeholder="Enter stock ticker (e.g., ECL)" oninput="this.value = this.value.toUpperCase()">
+            <button class="add-ticker-btn" onclick="handleAddTicker()">Add Ticker</button>
         </div>
 
-        <div class="input-group">
-            <label>Enter Your 1-Year Price Prediction ($):</label>
-            <input type="number" id="predictionInput" step="0.01" placeholder="e.g., 5.00">
-            <button onclick="handleAddPrediction()">Submit Prediction</button>
-        </div>
-
-        <div style="margin: 20px 0; color: #666;">
-            Market prices update daily around 3 PM. Previous day's prices shown until new data is available.
+        <div style="margin-top: 10px; color: #666;">
+            Market prices are updated daily around 3 PM. Previous day's prices are shown until new data is available.
         </div>
 
         <table>
@@ -78,73 +75,82 @@
                 <tr>
                     <th>Ticker</th>
                     <th>Current Price ($)</th>
-                    <th>1-Year Predictions</th>
+                    <th>Predictions</th>
                     <th>Action</th>
                 </tr>
             </thead>
             <tbody id="tickerTableBody"></tbody>
         </table>
+
+        <!-- Prediction Modal -->
+        <div id="predictionForm" style="display:none; margin-top: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+            <h3>Add 1-Year Price Prediction for <span id="selectedTicker"></span></h3>
+            <div>
+                <label>Current Price: $<span id="currentPrice"></span></label><br><br>
+                <label>Your 1-Year Target Price ($):</label><br>
+                <input type="number" id="predictionInput" step="0.01" style="margin: 10px 0;">
+                <button class="add-ticker-btn" onclick="submitPrediction()">Submit Prediction</button>
+            </div>
+        </div>
     </div>
 
     <script>
         const stockData = {
-            '138SL': { currentPrice: 4.07, predictions: [] },
             'ECL': { currentPrice: 3.27, predictions: [] },
-            'FTNA': { currentPrice: 9.21, predictions: [] }
+            '138SL': { currentPrice: 4.07, predictions: [] }
+            // Add more stocks as needed
         };
+
+        let selectedTickerSymbol = null;
 
         function handleAddTicker() {
             const ticker = document.getElementById('tickerInput').value.trim().toUpperCase();
-            
             if (!ticker) {
                 alert('Please enter a ticker symbol');
                 return;
             }
-
             if (!stockData[ticker]) {
                 alert('Ticker not found');
                 return;
             }
-
             addTickerToTable(ticker);
             document.getElementById('tickerInput').value = '';
-        }
-
-        function handleAddPrediction() {
-            const prediction = document.getElementById('predictionInput').value;
-            const ticker = document.getElementById('tickerInput').value.trim().toUpperCase();
-            
-            if (!ticker || !stockData[ticker]) {
-                alert('Please enter a valid ticker first');
-                return;
-            }
-
-            if (!prediction) {
-                alert('Please enter a prediction');
-                return;
-            }
-
-            stockData[ticker].predictions.push({
-                price: parseFloat(prediction),
-                date: new Date()
-            });
-
-            updateTable();
-            document.getElementById('predictionInput').value = '';
         }
 
         function addTickerToTable(ticker) {
             const tbody = document.getElementById('tickerTableBody');
             const row = document.createElement('tr');
-            
             row.innerHTML = `
-                <td>${ticker}</td>
+                <td class="clickable" onclick="showPredictionForm('${ticker}')">${ticker}</td>
                 <td>$${stockData[ticker].currentPrice.toFixed(2)}</td>
                 <td>${stockData[ticker].predictions.length} predictions</td>
-                <td><button onclick="removeTicker(this)" style="background-color: #dc3545;">Remove</button></td>
+                <td><button class="remove-btn" onclick="removeTicker(this)">Remove</button></td>
             `;
-            
             tbody.appendChild(row);
+        }
+
+        function showPredictionForm(ticker) {
+            selectedTickerSymbol = ticker;
+            document.getElementById('selectedTicker').textContent = ticker;
+            document.getElementById('currentPrice').textContent = stockData[ticker].currentPrice.toFixed(2);
+            document.getElementById('predictionInput').value = '';
+            document.getElementById('predictionForm').style.display = 'block';
+        }
+
+        function submitPrediction() {
+            const prediction = parseFloat(document.getElementById('predictionInput').value);
+            if (!prediction) {
+                alert('Please enter a valid prediction');
+                return;
+            }
+            
+            stockData[selectedTickerSymbol].predictions.push({
+                value: prediction,
+                date: new Date()
+            });
+
+            updateTable();
+            document.getElementById('predictionForm').style.display = 'none';
         }
 
         function removeTicker(button) {
@@ -154,9 +160,8 @@
         function updateTable() {
             const tbody = document.getElementById('tickerTableBody');
             tbody.innerHTML = '';
-            
             Object.keys(stockData).forEach(ticker => {
-                if (tbody.querySelector(`td:first-child:contains('${ticker}')`)) {
+                if (document.querySelector(`td:contains('${ticker}')`)) {
                     addTickerToTable(ticker);
                 }
             });
