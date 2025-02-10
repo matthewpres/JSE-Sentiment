@@ -4,32 +4,89 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>JSE Sentiment Analysis</title>
-    <!-- No external dependencies for now -->
     <style>
         body {
             font-family: Arial, sans-serif;
             margin: 40px;
+            background-color: #f5f5f5;
         }
         .container {
             max-width: 800px;
             margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         }
-        .form {
+        .search-form {
+            margin: 20px 0;
+        }
+        input {
+            padding: 8px;
+            width: 200px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            margin-right: 10px;
+        }
+        button {
+            padding: 8px 16px;
+            background: #0066cc;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #0052a3;
+        }
+        #results {
             margin-top: 20px;
         }
-        input, button {
-            padding: 8px;
-            margin: 5px;
+        .stock-card {
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 4px;
+            display: none;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>JSE Sentiment Analysis</h1>
-        <div class="form">
-            <input type="text" placeholder="Enter stock symbol (e.g., ECL)" id="stockInput">
-            <button onclick="alert('Coming soon!')">Search</button>
+        <div class="search-form">
+            <input type="text" id="stockInput" placeholder="Enter stock symbol (e.g., ECL)" oninput="this.value = this.value.toUpperCase()">
+            <button onclick="searchStock()">Search</button>
+        </div>
+        <div id="results">
+            <div class="stock-card" id="stockInfo">
+                <h2 id="stockName"></h2>
+                <p>Current Price: $<span id="currentPrice"></span></p>
+                <p>Market Sentiment: <span id="sentiment"></span></p>
+            </div>
         </div>
     </div>
+
+    <script>
+        const mockStocks = {
+            'ECL': { name: 'Express Catering Limited', price: 3.00 },
+            '138SL': { name: '138 Student Living', price: 3.50 }
+        };
+
+        function searchStock() {
+            const symbol = document.getElementById('stockInput').value;
+            const stockInfo = document.getElementById('stockInfo');
+            const stockName = document.getElementById('stockName');
+            const currentPrice = document.getElementById('currentPrice');
+            
+            if (mockStocks[symbol]) {
+                stockName.textContent = `${symbol} - ${mockStocks[symbol].name}`;
+                currentPrice.textContent = mockStocks[symbol].price.toFixed(2);
+                stockInfo.style.display = 'block';
+            } else {
+                alert('Stock not found. Please try another symbol.');
+            }
+        }
+    </script>
 </body>
 </html>
