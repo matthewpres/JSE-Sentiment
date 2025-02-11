@@ -135,7 +135,7 @@
         const database = firebase.database();
         const predictionsRef = database.ref('stock_predictions');
 
-        let stockPrices = {};
+        let stockPrices =        {};
 
         async function fetchStockPrices() {
             try {
@@ -162,11 +162,19 @@
                     div.textContent = ticker;
                     div.addEventListener('click', function() {
                         document.getElementById('tickerInput').value = ticker;
+                        showCurrentPrice(ticker);
                         autocompleteList.innerHTML = '';
                     });
                     autocompleteList.appendChild(div);
                 }
             });
+        }
+
+        function showCurrentPrice(ticker) {
+            const price = stockPrices[ticker];
+            document.getElementById('currentPriceDisplay').textContent = price !== undefined 
+                ? `Current Market Price: $${price.toFixed(2)}` 
+                : 'Market price not available';
         }
 
         function addPrediction() {
@@ -181,9 +189,9 @@
 
             console.log("Prediction added:", { ticker, predictionPrice });
 
-            // Push prediction to Firebase
             predictionsRef.push({
                 ticker: ticker,
+                currentPrice: stockPrices[ticker],
                 predictionPrice: predictionPrice,
                 timestamp: firebase.database.ServerValue.TIMESTAMP
             });
@@ -192,8 +200,40 @@
             errorMessageEl.style.color = "green";
         }
 
-        document.getElementById('tickerInput').addEventListener('input', updateAutocomplete);
+        function renderPredictionTable() {
+            predictionsRef.on('child_added', function(snapshot) {
+                const data = snapshot.val();
+                const ticker = data.ticker;
+                const currentPrice = data.currentPrice;
+                const predictionPrice = data.predictionPrice;
+
+                const existingRow = document.querySelector(`#predictionsBody tr[data-ticker="${ticker}"]`);
+                if (existingRow) {
+                    existingRow.remove();
+                }
+
+                const row = document.createElement('tr');
+                row.setAttribute('data-ticker', ticker);
+                row.innerHTML = `
+                    <td>${ticker}</td>
+                    <td>$${currentPrice ? currentPrice.toFixed(2) : 'N/A'}</td>
+                    <td>$${predictionPrice.toFixed(2)}</td>
+                    <td>${((predictionPrice - currentPrice) / currentPrice * 100).toFixed(2)}%</td>
+                    <td>1</td>
+                `;
+                document.getElementById('predictionsBody').appendChild(row);
+            });
+        }
+
+        document.getElementById('tickerInput').addEventListener('input', function() {
+            updateAutocomplete();
+            showCurrentPrice(this.value.toUpperCase());
+        });
+
         document.getElementById('submitPrediction').addEventListener('click', addPrediction);
+
+        renderPredictionTable();
     </script>
 </body>
 </html>
+
