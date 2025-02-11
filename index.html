@@ -54,9 +54,20 @@
             background-color: #f2f2f2;
         }
         .chart-container {
-            margin-top: 30px;
-            width: 100%;
-            text-align: center;
+            display: none;
+            margin-top: 20px;
+            padding: 15px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .expandable {
+            cursor: pointer;
+            color: #007bff;
+            font-weight: bold;
+        }
+        .expandable:hover {
+            text-decoration: underline;
         }
     </style>
 </head>
@@ -90,8 +101,8 @@
         </tbody>
     </table>
 
-    <div class="chart-container">
-        <h3 id="chartTitle">Stock Price Target Range</h3>
+    <div id="chartContainer" class="chart-container">
+        <h3 id="chartTitle"></h3>
         <canvas id="priceChart"></canvas>
     </div>
 
@@ -191,50 +202,30 @@
 
                     const row = document.createElement('tr');
                     row.innerHTML = `
-                        <td>${ticker}</td>
+                        <td class="expandable" onclick="showPriceChart('${ticker}', ${data.currentPrice}, ${avgPrediction}, ${data.lowPrediction}, ${data.highPrediction})">${ticker}</td>
                         <td>$${data.currentPrice.toFixed(2)}</td>
                         <td>$${avgPrediction.toFixed(2)}</td>
                         <td>${potentialChange}%</td>
                         <td>${data.predictionCount}</td>
                     `;
                     document.getElementById('predictionsBody').appendChild(row);
-
-                    if (ticker === document.getElementById('tickerInput').value.toUpperCase()) {
-                        updateChart(ticker, data.currentPrice, avgPrediction, data.lowPrediction, data.highPrediction);
-                    }
                 });
             });
         }
 
-        function updateChart(ticker, currentPrice, avgPrediction, lowPrediction, highPrediction) {
-            document.getElementById('chartTitle').innerText = `Price Target Range for ${ticker}`;
-            if (priceChart) priceChart.destroy();
-
+        function showPriceChart(ticker, current, avg, low, high) {
+            document.getElementById('chartContainer').style.display = "block";
+            document.getElementById('chartTitle').textContent = `Price Target Range for ${ticker}`;
+            
             const ctx = document.getElementById('priceChart').getContext('2d');
+            if (priceChart) priceChart.destroy();
             priceChart = new Chart(ctx, {
                 type: 'line',
-                data: {
-                    labels: ['Low', 'Current', 'Avg Prediction', 'High'],
-                    datasets: [{
-                        label: 'Price Targets',
-                        data: [lowPrediction, currentPrice, avgPrediction, highPrediction],
-                        borderColor: '#007bff',
-                        backgroundColor: '#007bff',
-                        fill: false,
-                        tension: 0.1
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    scales: {
-                        y: { beginAtZero: false }
-                    }
-                }
+                data: { labels: ["Low", "Average", "High"], datasets: [{ label: "Price Targets", data: [low, avg, high], borderColor: "blue", fill: false }] }
             });
         }
 
         document.getElementById('submitPrediction').addEventListener('click', addPrediction);
-        renderPredictionTable();
     </script>
 </body>
 </html>
