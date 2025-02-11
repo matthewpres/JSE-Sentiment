@@ -3,10 +3,11 @@
 <head>
     <meta charset="UTF-8">
     <title>JSE Sentiment Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
             padding: 20px;
         }
@@ -34,25 +35,6 @@
             border: none;
             cursor: pointer;
         }
-        .autocomplete-items {
-            position: absolute;
-            border: 1px solid #ddd;
-            border-top: none;
-            z-index: 99;
-            top: 100%;
-            left: 0;
-            right: 0;
-            max-height: 200px;
-            overflow-y: auto;
-            background-color: white;
-        }
-        .autocomplete-items div {
-            padding: 10px;
-            cursor: pointer;
-        }
-        .autocomplete-items div:hover {
-            background-color: #e9e9e9;
-        }
         .current-price-display {
             margin-top: 5px;
             font-size: 0.9em;
@@ -71,15 +53,10 @@
         th {
             background-color: #f2f2f2;
         }
-        .positive {
-            color: green;
-        }
-        .negative {
-            color: red;
-        }
-        #errorMessage {
-            color: red;
-            margin-top: 10px;
+        .chart-container {
+            margin-top: 30px;
+            width: 100%;
+            text-align: center;
         }
     </style>
 </head>
@@ -89,7 +66,6 @@
     <div class="input-container">
         <div class="ticker-section">
             <input type="text" id="tickerInput" placeholder="Enter Stock Ticker (e.g. ECL)" autocomplete="off">
-            <div id="autocompleteList" class="autocomplete-items"></div>
             <div id="currentPriceDisplay" class="current-price-display"></div>
         </div>
         <div class="price-section">
@@ -114,12 +90,16 @@
         </tbody>
     </table>
 
+    <div class="chart-container">
+        <h3 id="chartTitle">Stock Price Target Range</h3>
+        <canvas id="priceChart"></canvas>
+    </div>
+
     <!-- Firebase SDK -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
 
     <script>
-        // Firebase configuration
         const firebaseConfig = {
             apiKey: "AIzaSyAp2QQErI9LtACfXuktlX-5847Rt8JWPfM",
             authDomain: "jse-sentiment-analysis.firebaseapp.com",
@@ -130,12 +110,12 @@
             appId: "1:225282121975:web:29bd14c63a4c11fc66b3f2"
         };
 
-        // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
         const predictionsRef = database.ref('aggregated_predictions');
 
         let stockPrices = {};
+        let priceChart = null;
 
         async function fetchStockPrices() {
             try {
@@ -149,27 +129,6 @@
         }
 
         fetchStockPrices();
-
-        function updateAutocomplete() {
-            const value = document.getElementById('tickerInput').value.toUpperCase();
-            const autocompleteList = document.getElementById('autocompleteList');
-            autocompleteList.innerHTML = '';
-
-            if (!value) return;
-
-            Object.keys(stockPrices).forEach(ticker => {
-                if (ticker.startsWith(value)) {
-                    const div = document.createElement('div');
-                    div.textContent = ticker;
-                    div.addEventListener('click', function() {
-                        document.getElementById('tickerInput').value = ticker;
-                        showCurrentPrice(ticker);
-                        autocompleteList.innerHTML = '';
-                    });
-                    autocompleteList.appendChild(div);
-                }
-            });
-        }
 
         function showCurrentPrice(ticker) {
             const price = stockPrices[ticker];
@@ -198,13 +157,17 @@
                     return {
                         currentPrice: currentPrice,
                         totalPredictionPrice: predictionPrice,
-                        predictionCount: 1
+                        predictionCount: 1,
+                        lowPrediction: predictionPrice,
+                        highPrediction: predictionPrice
                     };
                 } else {
                     return {
                         currentPrice: currentData.currentPrice,
                         totalPredictionPrice: currentData.totalPredictionPrice + predictionPrice,
-                        predictionCount: currentData.predictionCount + 1
+                        predictionCount: currentData.predictionCount + 1,
+                        lowPrediction: Math.min(currentData.lowPrediction, predictionPrice),
+                        highPrediction: Math.max(currentData.highPrediction, predictionPrice)
                     };
                 }
             });
@@ -235,17 +198,42 @@
                         <td>${data.predictionCount}</td>
                     `;
                     document.getElementById('predictionsBody').appendChild(row);
+
+                    if (ticker === document.getElementById('tickerInput').value.toUpperCase()) {
+                        updateChart(ticker, data.currentPrice, avgPrediction, data.lowPrediction, data.highPrediction);
+                    }
                 });
             });
         }
 
-        document.getElementById('tickerInput').addEventListener('input', function() {
-            updateAutocomplete();
-            showCurrentPrice(this.value.toUpperCase());
-        });
+        function updateChart(ticker, currentPrice, avgPrediction, lowPrediction, highPrediction) {
+            document.getElementById('chartTitle').innerText = `Price Target Range for ${ticker}`;
+            if (priceChart) priceChart.destroy();
+
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            priceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['Low', 'Current', 'Avg Prediction', 'High'],
+                    datasets: [{
+                        label: 'Price Targets',
+                        data: [lowPrediction, currentPrice, avgPrediction, highPrediction],
+                        borderColor: '#007bff',
+                        backgroundColor: '#007bff',
+                        fill: false,
+                        tension: 0.1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: { beginAtZero: false }
+                    }
+                }
+            });
+        }
 
         document.getElementById('submitPrediction').addEventListener('click', addPrediction);
-
         renderPredictionTable();
     </script>
 </body>
