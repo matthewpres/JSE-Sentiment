@@ -51,16 +51,8 @@
     
     <div class="input-container">
         <input type="text" id="tickerInput" placeholder="Enter Stock Ticker (e.g. ECL)">
-        <button onclick="addTicker()">Add Ticker</button>
-    </div>
-
-    <div id="predictionSection" style="display: none;">
-        <h3>Add 1-Year Price Prediction for <span id="selectedTicker"></span></h3>
-        <p>Current Price: $<span id="currentPrice"></span></p>
-        <div class="input-container">
-            <input type="number" id="priceInput" placeholder="Your 1-Year Target Price ($)">
-            <button onclick="submitPrediction()">Submit Prediction</button>
-        </div>
+        <input type="number" id="priceInput" placeholder="1-Year Price Prediction ($)">
+        <button onclick="addPrediction()">Submit Prediction</button>
     </div>
 
     <table id="predictionsTable">
@@ -70,6 +62,7 @@
                 <th>Current Price ($)</th>
                 <th>Prediction Price ($)</th>
                 <th>Potential Upside/Downside (%)</th>
+                <th>Potential $ Gain/Loss</th>
                 <th>Action</th>
             </tr>
         </thead>
@@ -79,52 +72,34 @@
     </table>
 
     <script>
-        let currentTickerData = null;
+        // Predefined stock prices from Mayberry trade sheet
+        const stockPrices = {
+            'ECL': 3.27,
+            // Add more stocks as needed
+        };
 
-        function addTicker() {
+        function addPrediction() {
             const tickerInput = document.getElementById('tickerInput');
-            const ticker = tickerInput.value.toUpperCase();
-            
-            if (!ticker) {
-                alert('Please enter a stock ticker');
-                return;
-            }
-
-            // Simulate fetching current price (in a real app, this would be an API call)
-            const currentPrice = (Math.random() * 100).toFixed(2);
-            
-            // Store current ticker data
-            currentTickerData = {
-                ticker: ticker,
-                currentPrice: parseFloat(currentPrice)
-            };
-
-            // Update UI
-            document.getElementById('selectedTicker').textContent = ticker;
-            document.getElementById('currentPrice').textContent = currentPrice;
-            document.getElementById('predictionSection').style.display = 'block';
-            
-            // Clear ticker input
-            tickerInput.value = '';
-        }
-
-        function submitPrediction() {
-            if (!currentTickerData) {
-                alert('Please add a ticker first');
-                return;
-            }
-
             const priceInput = document.getElementById('priceInput');
+            const ticker = tickerInput.value.toUpperCase();
             const predictionPrice = parseFloat(priceInput.value);
 
-            if (!predictionPrice) {
-                alert('Please enter a valid prediction price');
+            // Validate inputs
+            if (!ticker || !predictionPrice) {
+                alert('Please enter both ticker and prediction price');
+                return;
+            }
+
+            // Get current price
+            const currentPrice = stockPrices[ticker];
+            if (currentPrice === undefined) {
+                alert('Stock ticker not found in database');
                 return;
             }
 
             // Calculate potential upside/downside
-            const currentPrice = currentTickerData.currentPrice;
             const upsideDownside = ((predictionPrice - currentPrice) / currentPrice * 100).toFixed(2);
+            const dollarGainLoss = (predictionPrice - currentPrice).toFixed(2);
 
             // Create new row in predictions table
             const predictionsBody = document.getElementById('predictionsBody');
@@ -132,7 +107,7 @@
             
             // Ticker cell
             const tickerCell = newRow.insertCell(0);
-            tickerCell.textContent = currentTickerData.ticker;
+            tickerCell.textContent = ticker;
 
             // Current Price cell
             const currentPriceCell = newRow.insertCell(1);
@@ -147,8 +122,13 @@
             upsideDownsideCell.textContent = `${upsideDownside}%`;
             upsideDownsideCell.classList.add(upsideDownside >= 0 ? 'positive' : 'negative');
 
+            // Dollar Gain/Loss cell
+            const dollarGainLossCell = newRow.insertCell(4);
+            dollarGainLossCell.textContent = `$${dollarGainLoss}`;
+            dollarGainLossCell.classList.add(dollarGainLoss >= 0 ? 'positive' : 'negative');
+
             // Action cell
-            const actionCell = newRow.insertCell(4);
+            const actionCell = newRow.insertCell(5);
             const deleteButton = document.createElement('button');
             deleteButton.textContent = 'Delete';
             deleteButton.onclick = function() {
@@ -156,10 +136,9 @@
             };
             actionCell.appendChild(deleteButton);
 
-            // Reset inputs and hide prediction section
+            // Clear inputs
+            tickerInput.value = '';
             priceInput.value = '';
-            document.getElementById('predictionSection').style.display = 'none';
-            currentTickerData = null;
         }
     </script>
 </body>
