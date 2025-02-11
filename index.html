@@ -14,6 +14,7 @@
             display: flex;
             gap: 10px;
             margin-bottom: 20px;
+            position: relative;
         }
         .input-container input {
             flex-grow: 1;
@@ -25,6 +26,28 @@
             color: white;
             border: none;
             cursor: pointer;
+        }
+        .autocomplete-items {
+            position: absolute;
+            border: 1px solid #ddd;
+            border-top: none;
+            z-index: 99;
+            top: 100%;
+            left: 0;
+            right: 0;
+            max-height: 150px;
+            overflow-y: auto;
+            background-color: white;
+        }
+        .autocomplete-items div {
+            padding: 10px;
+            cursor: pointer;
+        }
+        .autocomplete-items div:hover {
+            background-color: #e9e9e9;
+        }
+        .active-item {
+            background-color: #e9e9e9;
         }
         table {
             width: 100%;
@@ -48,13 +71,20 @@
             color: red;
             margin-top: 10px;
         }
+        .ticker-input-wrapper {
+            position: relative;
+            flex-grow: 1;
+        }
     </style>
 </head>
 <body>
     <h2>JSE Sentiment Analysis</h2>
     
     <div class="input-container">
-        <input type="text" id="tickerInput" placeholder="Enter Stock Ticker (e.g. ECL)">
+        <div class="ticker-input-wrapper">
+            <input type="text" id="tickerInput" placeholder="Enter Stock Ticker (e.g. ECL)" autocomplete="off">
+            <div id="autocompleteList" class="autocomplete-items"></div>
+        </div>
         <input type="number" id="priceInput" placeholder="1-Year Price Prediction ($)">
         <button onclick="addPrediction()">Submit Prediction</button>
     </div>
@@ -72,7 +102,6 @@
             </tr>
         </thead>
         <tbody id="predictionsBody">
-            <!-- Predictions will be added here dynamically -->
         </tbody>
     </table>
 
@@ -129,20 +158,90 @@
             'MFS': 0.52, 'LAB': 1.26, 'TROPICAL': 2.93, 'TTECH': 1.52
         };
 
+        // Autocomplete functionality
+        const tickerInput = document.getElementById('tickerInput');
+        const autocompleteList = document.getElementById('autocompleteList');
+        let currentFocus = -1;
+
+        tickerInput.addEventListener('input', function(e) {
+            const val = this.value.toUpperCase();
+            closeAllLists();
+            if (!val) { return false; }
+
+            const matchingTickers = Object.keys(stockPrices).filter(ticker => 
+                ticker.includes(val)
+            );
+
+            if (matchingTickers.length > 0) {
+                const list = document.getElementById('autocompleteList');
+                matchingTickers.forEach(ticker => {
+                    const div = document.createElement('div');
+                    div.innerHTML = ticker;
+                    div.addEventListener('click', function(e) {
+                        tickerInput.value = this.innerHTML;
+                        closeAllLists();
+                    });
+                    list.appendChild(div);
+                });
+            }
+        });
+
+        tickerInput.addEventListener('keydown', function(e) {
+            let x = document.getElementById('autocompleteList');
+            if (x) x = x.getElementsByTagName('div');
+            if (e.keyCode == 40) { // down
+                currentFocus++;
+                addActive(x);
+            } else if (e.keyCode == 38) { // up
+                currentFocus--;
+                addActive(x);
+            } else if (e.keyCode == 13) { // enter
+                e.preventDefault();
+                if (currentFocus > -1) {
+                    if (x) x[currentFocus].click();
+                }
+            }
+        });
+
+        function addActive(x) {
+            if (!x) return false;
+            removeActive(x);
+            if (currentFocus >= x.length) currentFocus = 0;
+            if (currentFocus < 0) currentFocus = (x.length - 1);
+            x[currentFocus].classList.add('active-item');
+        }
+
+        function removeActive(x) {
+            for (let i = 0; i < x.length; i++) {
+                x[i].classList.remove('active-item');
+            }
+        }
+
+        function closeAllLists(elmnt) {
+            const x = document.getElementsByClassName('autocomplete-items');
+            for (let i = 0; i < x.length; i++) {
+                if (elmnt != x[i] && elmnt != tickerInput) {
+                    x[i].parentNode.removeChild(x[i]);
+                }
+            }
+        }
+
+        document.addEventListener('click', function(e) {
+            closeAllLists(e.target);
+        });
+
         // Function to update aggregated predictions
         function updateAggregatedPrediction(ticker, predictionPrice) {
             const tickerRef = aggregatedPredictionsRef.child(ticker);
             
             tickerRef.transaction((currentData) => {
                 if (currentData === null) {
-                    // First prediction for this ticker
                     return {
                         currentPrice: stockPrices[ticker],
                         totalPredictionPrice: predictionPrice,
                         predictionCount: 1
                     };
                 } else {
-                    // Update existing predictions
                     return {
                         currentPrice: currentData.currentPrice,
                         totalPredictionPrice: currentData.totalPredictionPrice + predictionPrice,
@@ -168,14 +267,9 @@
         // Render aggregated prediction in the table
         function renderAggregatedPrediction(ticker, predictionData) {
             const { currentPrice, totalPredictionPrice, predictionCount } = predictionData;
-            
-            // Calculate average prediction price
             const avgPredictionPrice = totalPredictionPrice / predictionCount;
-            
-            // Calculate potential upside/downside
             const upsideDownside = ((avgPredictionPrice - currentPrice) / currentPrice * 100).toFixed(2);
 
-            // Find or create row for this ticker
             let existingRow = null;
             const predictionsBody = document.getElementById('predictionsBody');
             for (let i = 0; i < predictionsBody.rows.length; i++) {
@@ -186,82 +280,23 @@
             }
 
             if (existingRow) {
-                // Update existing row
                 existingRow.cells[1].textContent = `$${parseFloat(currentPrice).toFixed(2)}`;
                 existingRow.cells[2].textContent = `$${parseFloat(avgPredictionPrice).toFixed(2)}`;
                 existingRow.cells[3].textContent = `${upsideDownside}%`;
                 existingRow.cells[3].className = upsideDownside >= 0 ? 'positive' : 'negative';
                 existingRow.cells[4].textContent = predictionCount;
             } else {
-                // Create new row
                 const newRow = predictionsBody.insertRow(0);
                 
-                // Ticker cell
                 const tickerCell = newRow.insertCell(0);
                 tickerCell.textContent = ticker;
 
-                // Current Price cell
                 const currentPriceCell = newRow.insertCell(1);
                 currentPriceCell.textContent = `$${parseFloat(currentPrice).toFixed(2)}`;
 
-                // Average Prediction Price cell
                 const avgPredictionPriceCell = newRow.insertCell(2);
                 avgPredictionPriceCell.textContent = `$${parseFloat(avgPredictionPrice).toFixed(2)}`;
 
-                // Upside/Downside cell
                 const upsideDownsideCell = newRow.insertCell(3);
                 upsideDownsideCell.textContent = `${upsideDownside}%`;
-                upsideDownsideCell.classList.add(upsideDownside >= 0 ? 'positive' : 'negative');
-
-                // Prediction Count cell
-                const predictionCountCell = newRow.insertCell(4);
-                predictionCountCell.textContent = predictionCount;
-            }
-        }
-
-        // Function to add prediction
-        function addPrediction() {
-            const errorMessageEl = document.getElementById('errorMessage');
-            errorMessageEl.textContent = ''; // Clear previous errors
-
-            const tickerInput = document.getElementById('tickerInput');
-            const priceInput = document.getElementById('priceInput');
-            const ticker = tickerInput.value.toUpperCase().replace(/\s+/g, '');
-            const predictionPrice = parseFloat(priceInput.value);
-
-            // Validate inputs
-            if (!ticker || !predictionPrice) {
-                errorMessageEl.textContent = 'Please enter both ticker and prediction price';
-                return;
-            }
-
-            // Get current price
-            const currentPrice = stockPrices[ticker];
-            if (currentPrice === undefined) {
-                errorMessageEl.textContent = 'Stock ticker not found in database';
-                return;
-            }
-
-            try {
-                // Push individual prediction to Firebase
-                predictionsRef.push({
-                    ticker: ticker,
-                    currentPrice: currentPrice,
-                    predictionPrice: predictionPrice,
-                    timestamp: firebase.database.ServerValue.TIMESTAMP
-                });
-
-                // Update aggregated predictions
-                updateAggregatedPrediction(ticker, predictionPrice);
-
-                // Clear inputs
-                tickerInput.value = '';
-                priceInput.value = '';
-            } catch (error) {
-                console.error('Error pushing prediction:', error);
-                errorMessageEl.textContent = `Failed to submit prediction: ${error.message}`;
-            }
-        }
-    </script>
-</body>
-</html>
+                upsideDownside
