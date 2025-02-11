@@ -133,7 +133,7 @@
         // Initialize Firebase
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
-        const predictionsRef = database.ref('stock_predictions');
+        const predictionsRef = database.ref('aggregated_predictions');
 
         let stockPrices = {};
 
@@ -142,13 +142,13 @@
                 const response = await fetch("https://raw.githubusercontent.com/matthewpres/JSE-Sentiment/main/tickers.json");
                 stockPrices = await response.json();
                 console.log("Stock Prices Loaded:", stockPrices);
-                renderPredictionTable(); // Refresh table after fetching prices
+                renderPredictionTable();
             } catch (error) {
                 console.error("Error fetching tickers:", error);
             }
         }
 
-        fetchStockPrices(); // Fetch tickers on page load
+        fetchStockPrices();
 
         function updateAutocomplete() {
             const value = document.getElementById('tickerInput').value.toUpperCase();
@@ -191,52 +191,51 @@
                 return;
             }
 
-            console.log("Prediction added:", { ticker, predictionPrice });
+            const currentPrice = stockPrices[ticker];
 
-            predictionsRef.push({
-                ticker: ticker,
-                currentPrice: stockPrices[ticker], // Ensuring the correct market price is saved
-                predictionPrice: predictionPrice,
-                timestamp: firebase.database.ServerValue.TIMESTAMP
+            predictionsRef.child(ticker).transaction((currentData) => {
+                if (!currentData) {
+                    return {
+                        currentPrice: currentPrice,
+                        totalPredictionPrice: predictionPrice,
+                        predictionCount: 1
+                    };
+                } else {
+                    return {
+                        currentPrice: currentData.currentPrice,
+                        totalPredictionPrice: currentData.totalPredictionPrice + predictionPrice,
+                        predictionCount: currentData.predictionCount + 1
+                    };
+                }
             });
 
             errorMessageEl.textContent = "Prediction submitted successfully!";
             errorMessageEl.style.color = "green";
 
-            // Clear input fields after submission
             tickerInput.value = "";
             priceInput.value = "";
             document.getElementById('currentPriceDisplay').textContent = "";
         }
 
         function renderPredictionTable() {
-            predictionsRef.on('child_added', function(snapshot) {
-                const data = snapshot.val();
-                const ticker = data.ticker;
-                let currentPrice = data.currentPrice;
-                const predictionPrice = data.predictionPrice;
+            predictionsRef.on('value', function(snapshot) {
+                document.getElementById('predictionsBody').innerHTML = "";
+                snapshot.forEach((child) => {
+                    const ticker = child.key;
+                    const data = child.val();
+                    const avgPrediction = data.totalPredictionPrice / data.predictionCount;
+                    const potentialChange = ((avgPrediction - data.currentPrice) / data.currentPrice * 100).toFixed(2);
 
-                if (!currentPrice || currentPrice === 'N/A') {
-                    currentPrice = stockPrices[ticker] ? stockPrices[ticker] : 'N/A';
-                }
-
-                const potentialChange = currentPrice !== 'N/A' ? ((predictionPrice - currentPrice) / currentPrice * 100).toFixed(2) : 'N/A';
-
-                const existingRow = document.querySelector(`#predictionsBody tr[data-ticker="${ticker}"]`);
-                if (existingRow) {
-                    existingRow.remove();
-                }
-
-                const row = document.createElement('tr');
-                row.setAttribute('data-ticker', ticker);
-                row.innerHTML = `
-                    <td>${ticker}</td>
-                    <td>$${currentPrice !== 'N/A' ? currentPrice.toFixed(2) : 'N/A'}</td>
-                    <td>$${predictionPrice.toFixed(2)}</td>
-                    <td>${potentialChange}%</td>
-                    <td>1</td>
-                `;
-                document.getElementById('predictionsBody').appendChild(row);
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${ticker}</td>
+                        <td>$${data.currentPrice.toFixed(2)}</td>
+                        <td>$${avgPrediction.toFixed(2)}</td>
+                        <td>${potentialChange}%</td>
+                        <td>${data.predictionCount}</td>
+                    `;
+                    document.getElementById('predictionsBody').appendChild(row);
+                });
             });
         }
 
