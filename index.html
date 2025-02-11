@@ -1,152 +1,141 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>JSE Sentiment Analysis</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 900px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .input-container {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        .ticker-section {
-            flex-grow: 1;
-            position: relative;
-        }
-        .price-section {
-            flex-grow: 1;
-        }
-        .input-container input {
-            width: 100%;
-            padding: 8px;
-            box-sizing: border-box;
-        }
-        .input-container button {
-            padding: 8px 15px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-        th {
-            background-color: #f2f2f2;
-        }
-        .price-target-container {
-            margin-top: 30px;
-        }
-        .chart-container {
-            width: 100%;
-            max-width: 600px;
-            margin: auto;
-        }
-    </style>
-</head>
-<body>
-    <h2>JSE Sentiment Analysis</h2>
-    
-    <div class="input-container">
-        <div class="ticker-section">
-            <input type="text" id="tickerInput" placeholder="Enter Stock Ticker (e.g. ECL)" autocomplete="off">
-            <div id="currentPriceDisplay"></div>
-        </div>
-        <div class="price-section">
-            <input type="number" id="priceInput" placeholder="1-Year Price Prediction ($)" step="0.01">
-        </div>
-        <button onclick="addPrediction()">Submit Prediction</button>
-    </div>
-    
-    <div id="errorMessage" style="color: red;"></div>
-    
-    <table id="predictionsTable">
-        <thead>
-            <tr>
-                <th>Ticker</th>
-                <th>Current Price ($)</th>
-                <th>Avg Prediction Price ($)</th>
-                <th>Potential Upside/Downside (%)</th>
-                <th>Prediction Count</th>
-            </tr>
-        </thead>
-        <tbody id="predictionsBody">
-        </tbody>
-    </table>
-    
-    <div class="price-target-container">
-        <h3 id="chartTitle">Price Target Range</h3>
-        <div class="chart-container">
-            <canvas id="priceTargetChart"></canvas>
-        </div>
-    </div>
-    
-    <script>
-        const stockPrices = {};
-        fetch("https://raw.githubusercontent.com/matthewpres/JSE-Sentiment/main/tickers.json")
-            .then(response => response.json())
-            .then(data => {
-                Object.assign(stockPrices, data);
-                console.log("Stock Prices Loaded:", stockPrices);
-            });
+// Load tickers and prices from JSON
+const tickersUrl = "https://raw.githubusercontent.com/matthewpres/JSE-Sentiment/main/tickers.json";
+let stockPrices = {};
 
-        function showCurrentPrice(ticker) {
-            const price = stockPrices[ticker];
-            document.getElementById('currentPriceDisplay').textContent = price ? `Current Market Price: $${price.toFixed(2)}` : 'Market price not available';
-        }
+fetch(tickersUrl)
+    .then(response => response.json())
+    .then(data => {
+        stockPrices = data;
+        console.log("Stock Prices Loaded:", stockPrices);
+        updateAutocomplete();
+        renderPredictionTable();
+    })
+    .catch(error => console.error("Error loading tickers:", error));
 
-        function addPrediction() {
-            const ticker = document.getElementById('tickerInput').value.toUpperCase();
-            const predictionPrice = parseFloat(document.getElementById('priceInput').value);
-            const currentPrice = stockPrices[ticker];
-            if (!ticker || isNaN(predictionPrice) || !(ticker in stockPrices)) {
-                document.getElementById('errorMessage').textContent = 'Invalid ticker or missing price.';
-                return;
+// Update autocomplete with tickers
+function updateAutocomplete() {
+    const tickerInput = document.getElementById("tickerInput");
+    const datalist = document.getElementById("tickerList");
+    datalist.innerHTML = "";
+    Object.keys(stockPrices).forEach(ticker => {
+        let option = document.createElement("option");
+        option.value = ticker;
+        datalist.appendChild(option);
+    });
+}
+
+// Show market price when ticker is selected
+function showCurrentPrice(ticker) {
+    const price = stockPrices[ticker];
+    document.getElementById("currentPriceDisplay").textContent =
+        price ? `Current Market Price: $${price.toFixed(2)}` : "Market price not available";
+}
+
+document.getElementById("tickerInput").addEventListener("input", function () {
+    showCurrentPrice(this.value.toUpperCase());
+});
+
+// Submit prediction
+function addPrediction() {
+    const ticker = document.getElementById("tickerInput").value.toUpperCase();
+    const predictionPrice = parseFloat(document.getElementById("priceInput").value);
+    const errorMessageEl = document.getElementById("errorMessage");
+    
+    if (!ticker || isNaN(predictionPrice) || !(ticker in stockPrices)) {
+        errorMessageEl.textContent = "Invalid ticker or missing price.";
+        return;
+    }
+
+    console.log("Prediction added:", { ticker, predictionPrice });
+
+    predictionsRef.push({
+        ticker: ticker,
+        currentPrice: stockPrices[ticker],
+        predictionPrice: predictionPrice,
+        timestamp: firebase.database.ServerValue.TIMESTAMP
+    });
+
+    errorMessageEl.textContent = "Prediction submitted successfully!";
+    errorMessageEl.style.color = "green";
+    document.getElementById("tickerInput").value = "";
+    document.getElementById("priceInput").value = "";
+
+    renderPredictionTable();
+}
+
+document.getElementById("submitPrediction").addEventListener("click", addPrediction);
+
+// Render predictions
+function renderPredictionTable() {
+    predictionsRef.once("value", snapshot => {
+        const predictionsData = snapshot.val();
+        const predictionsBody = document.getElementById("predictionsBody");
+        predictionsBody.innerHTML = "";
+        
+        let aggregatedPredictions = {};
+        
+        Object.values(predictionsData || {}).forEach(entry => {
+            if (!aggregatedPredictions[entry.ticker]) {
+                aggregatedPredictions[entry.ticker] = { count: 0, total: 0, min: entry.predictionPrice, max: entry.predictionPrice };
             }
-            predictionsRef.push({ ticker, currentPrice, predictionPrice, timestamp: Date.now() });
-            document.getElementById('tickerInput').value = '';
-            document.getElementById('priceInput').value = '';
-            document.getElementById('currentPriceDisplay').textContent = '';
-            document.getElementById('errorMessage').textContent = 'Prediction submitted successfully!';
-            document.getElementById('errorMessage').style.color = 'green';
-        }
+            let record = aggregatedPredictions[entry.ticker];
+            record.count++;
+            record.total += entry.predictionPrice;
+            record.min = Math.min(record.min, entry.predictionPrice);
+            record.max = Math.max(record.max, entry.predictionPrice);
+        });
 
-        function renderPriceTargetChart(ticker, currentPrice, minPrice, maxPrice, avgPrice) {
-            document.getElementById('chartTitle').textContent = `Price Target Range for ${ticker}`;
-            const ctx = document.getElementById('priceTargetChart').getContext('2d');
-            if (window.priceChart) window.priceChart.destroy();
-            window.priceChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: ['Low', 'Current', 'Average', 'High'],
-                    datasets: [{
-                        label: 'Price Targets',
-                        data: [minPrice, currentPrice, avgPrice, maxPrice],
-                        backgroundColor: ['red', 'gray', 'blue', 'green']
-                    }]
+        Object.keys(aggregatedPredictions).forEach(ticker => {
+            let record = aggregatedPredictions[ticker];
+            let avgPrice = record.total / record.count;
+            let currentPrice = stockPrices[ticker] || "N/A";
+            let row = document.createElement("tr");
+            row.innerHTML = `
+                <td>${ticker}</td>
+                <td>${currentPrice !== "N/A" ? `$${currentPrice.toFixed(2)}` : "N/A"}</td>
+                <td>$${avgPrice.toFixed(2)}</td>
+                <td>${currentPrice !== "N/A" ? `${((avgPrice - currentPrice) / currentPrice * 100).toFixed(2)}%` : "N/A"}</td>
+                <td>${record.count}</td>
+            `;
+            row.addEventListener("click", () => renderPriceTargetChart(ticker, record.min, avgPrice, record.max, currentPrice));
+            predictionsBody.appendChild(row);
+        });
+    });
+}
+
+// Render price target chart
+function renderPriceTargetChart(ticker, min, avg, max, currentPrice) {
+    const chartContainer = document.getElementById("priceTargetChart");
+    chartContainer.innerHTML = `<h3>Price Target Range for ${ticker}</h3>`;
+    
+    const canvas = document.createElement("canvas");
+    chartContainer.appendChild(canvas);
+    
+    new Chart(canvas, {
+        type: "scatter",
+        data: {
+            datasets: [{
+                label: "Price Targets",
+                data: [
+                    { x: min, y: 0 },
+                    { x: avg, y: 0 },
+                    { x: max, y: 0 },
+                    { x: currentPrice, y: 0 }
+                ],
+                backgroundColor: ["black", "blue", "black", "green"],
+                pointRadius: [5, 7, 5, 7],
+            }]
+        },
+        options: {
+            scales: {
+                x: {
+                    type: "linear",
+                    position: "bottom"
                 },
-                options: {
-                    responsive: true,
-                    scales: {
-                        y: { beginAtZero: false }
-                    }
+                y: {
+                    display: false
                 }
-            });
+            }
         }
-    </script>
-</body>
-</html>
+    });
+}
