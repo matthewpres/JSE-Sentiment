@@ -1,168 +1,281 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>JSE Sentiment Analysis</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-        }
-        .chart-container {
-            width: 600px;
-            margin: 20px auto;
-        }
-        .number-line {
-            width: 100%;
-            height: 50px;
-            position: relative;
-            border-top: 2px solid black;
-        }
-        .marker {
-            position: absolute;
-            top: -10px;
-            text-align: center;
-            transform: translateX(-50%);
-            font-size: 14px;
-        }
-    </style>
+  <meta charset="UTF-8" />
+  <title>JSE Sentiment Analysis</title>
+  <!-- Load Chart.js (if you want to add additional charts later) -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+    }
+
+    h1 {
+      margin-bottom: 10px;
+    }
+
+    input {
+      margin-right: 5px;
+    }
+
+    table {
+      margin-top: 15px;
+      border-collapse: collapse;
+      width: 100%;
+      max-width: 600px;
+    }
+    table thead {
+      background-color: #f4f4f4;
+    }
+    table th,
+    table td {
+      padding: 8px 12px;
+      text-align: center;
+    }
+    table th {
+      border-bottom: 2px solid #ccc;
+    }
+    table td {
+      border-bottom: 1px solid #ccc;
+    }
+
+    .chart-container {
+      width: 600px;
+      margin: 40px auto;
+    }
+    /* A label for the error/success messages */
+    #errorMessage {
+      margin-top: 10px;
+      font-weight: bold;
+    }
+    #currentPriceDisplay {
+      margin-top: 5px;
+    }
+
+    /* Make a “track” bar for price targets */
+    .number-line {
+      position: relative;
+      width: 100%;
+      height: 8px;             /* A thicker gray bar */
+      background-color: #ccc;  /* The bar color */
+      border-radius: 4px;      /* Rounded ends */
+      margin-top: 20px;
+    }
+
+    /* Marker labels that sit above the line */
+    .marker {
+      position: absolute;
+      top: -25px;              /* Move label above the bar */
+      transform: translateX(-50%);
+      background: #fff;
+      border: 1px solid #ccc;
+      border-radius: 3px;
+      padding: 2px 4px;
+      font-size: 14px;
+      white-space: nowrap;
+    }
+
+    /* Optionally style the “current price” marker differently */
+    .marker-current {
+      color: #d00;
+      border-color: #d00;
+      font-weight: bold;
+    }
+  </style>
 </head>
 <body>
 
-<h1>JSE Sentiment Analysis</h1>
+  <h1>JSE Sentiment Analysis</h1>
 
-<!-- Input for stock ticker -->
-<input type="text" id="tickerInput" placeholder="Enter Stock Ticker (e.g. ECL)">
-<input type="number" id="priceInput" placeholder="1-Year Price Prediction ($)">
-<button id="submitPrediction">Submit Prediction</button>
+  <!-- Input for stock ticker -->
+  <input type="text" id="tickerInput" placeholder="Enter Stock Ticker (e.g. ECL)" />
+  <input type="number" id="priceInput" placeholder="1-Year Price Prediction ($)" />
+  <button id="submitPrediction">Submit Prediction</button>
 
-<p id="errorMessage" style="color:red;"></p>
-<p id="currentPriceDisplay" style="color:green;"></p>
+  <p id="errorMessage"></p>
+  <p id="currentPriceDisplay"></p>
 
-<table border="1">
+  <table border="1">
     <thead>
-        <tr>
-            <th>Ticker</th>
-            <th>Current Price ($)</th>
-            <th>Avg Prediction Price ($)</th>
-            <th>Potential Upside/Downside (%)</th>
-            <th>Prediction Count</th>
-        </tr>
+      <tr>
+        <th>Ticker</th>
+        <th>Current Price ($)</th>
+        <th>Avg Prediction Price ($)</th>
+        <th>Potential Upside/Downside (%)</th>
+        <th>Prediction Count</th>
+      </tr>
     </thead>
     <tbody id="predictionsBody"></tbody>
-</table>
+  </table>
 
-<div class="chart-container">
+  <div class="chart-container">
     <h3>Price Target Range</h3>
     <div id="priceTargetChart"></div>
-</div>
+  </div>
 
-<script>
-// Fetch tickers and market prices
-const tickersUrl = "https://raw.githubusercontent.com/matthewpres/JSE-Sentiment/main/tickers.json";
-let stockPrices = {};
-fetch(tickersUrl)
-    .then(response => response.json())
-    .then(data => {
+  <script>
+    // URL to your JSON file containing tickers & current market prices
+    const tickersUrl = "https://raw.githubusercontent.com/matthewpres/JSE-Sentiment/main/tickers.json";
+    let stockPrices = {};
+
+    // Fetch tickers and market prices
+    fetch(tickersUrl)
+      .then(response => response.json())
+      .then(data => {
         stockPrices = data;
         console.log("Stock Prices Loaded:", stockPrices);
         updateAutocomplete();
         renderPredictionTable();
-    })
-    .catch(error => console.error("Error loading tickers:", error));
+      })
+      .catch(error => console.error("Error loading tickers:", error));
 
-// Update autocomplete
-function updateAutocomplete() {
-    let tickerInput = document.getElementById("tickerInput");
-    let datalist = document.createElement("datalist");
-    datalist.id = "tickerList";
-    Object.keys(stockPrices).forEach(ticker => {
+    // Create a datalist for ticker auto-complete
+    function updateAutocomplete() {
+      let tickerInput = document.getElementById("tickerInput");
+      let datalist = document.createElement("datalist");
+      datalist.id = "tickerList";
+
+      Object.keys(stockPrices).forEach(ticker => {
         let option = document.createElement("option");
         option.value = ticker;
         datalist.appendChild(option);
-    });
-    tickerInput.appendChild(datalist);
-}
+      });
 
-// Show market price when ticker is selected
-function showCurrentPrice(ticker) {
-    const price = stockPrices[ticker];
-    document.getElementById("currentPriceDisplay").textContent =
-        price !== undefined ? `Current Market Price: $${price.toFixed(2)}` : "Market price not available";
-}
+      // Attach our datalist to the input
+      tickerInput.setAttribute("list", "tickerList");
+      document.body.appendChild(datalist);
+    }
 
-// Submit prediction
-document.getElementById("submitPrediction").addEventListener("click", function () {
-    const ticker = document.getElementById("tickerInput").value.toUpperCase();
-    const predictionPrice = parseFloat(document.getElementById("priceInput").value);
-    const errorMessageEl = document.getElementById("errorMessage");
+    // Show market price in the paragraph below the inputs
+    function showCurrentPrice(ticker) {
+      const price = stockPrices[ticker];
+      document.getElementById("currentPriceDisplay").textContent =
+        price !== undefined
+          ? `Current Market Price: $${price.toFixed(2)}`
+          : "Market price not available";
+    }
 
-    if (!ticker || isNaN(predictionPrice) || !(ticker in stockPrices)) {
+    // Submit prediction
+    document.getElementById("submitPrediction").addEventListener("click", function () {
+      const ticker = document.getElementById("tickerInput").value.toUpperCase();
+      const predictionPrice = parseFloat(document.getElementById("priceInput").value);
+      const errorMessageEl = document.getElementById("errorMessage");
+
+      if (!ticker || isNaN(predictionPrice) || !(ticker in stockPrices)) {
         errorMessageEl.textContent = "Invalid ticker or missing price.";
+        errorMessageEl.style.color = "red";
         return;
-    }
+      }
 
-    console.log("Prediction added:", { ticker, predictionPrice });
-
-    // Store prediction in localStorage
-    let storedPredictions = JSON.parse(localStorage.getItem("predictions")) || {};
-    if (!storedPredictions[ticker]) {
+      // Store prediction in localStorage
+      let storedPredictions = JSON.parse(localStorage.getItem("predictions")) || {};
+      if (!storedPredictions[ticker]) {
         storedPredictions[ticker] = [];
-    }
-    storedPredictions[ticker].push(predictionPrice);
-    localStorage.setItem("predictions", JSON.stringify(storedPredictions));
+      }
+      storedPredictions[ticker].push(predictionPrice);
+      localStorage.setItem("predictions", JSON.stringify(storedPredictions));
 
-    errorMessageEl.textContent = "Prediction submitted successfully!";
-    errorMessageEl.style.color = "green";
-    document.getElementById("tickerInput").value = "";
-    document.getElementById("priceInput").value = "";
+      // Show a success message
+      errorMessageEl.textContent = "Prediction submitted successfully!";
+      errorMessageEl.style.color = "green";
 
-    renderPredictionTable();
-});
+      // Clear inputs
+      document.getElementById("tickerInput").value = "";
+      document.getElementById("priceInput").value = "";
 
-// Render prediction table
-function renderPredictionTable() {
-    let predictionsData = JSON.parse(localStorage.getItem("predictions")) || {};
-    let predictionsBody = document.getElementById("predictionsBody");
-    predictionsBody.innerHTML = "";
+      renderPredictionTable();
+    });
 
-    Object.keys(predictionsData).forEach(ticker => {
+    // Render the table of predictions
+    function renderPredictionTable() {
+      let predictionsData = JSON.parse(localStorage.getItem("predictions")) || {};
+      let predictionsBody = document.getElementById("predictionsBody");
+      predictionsBody.innerHTML = "";
+
+      Object.keys(predictionsData).forEach(ticker => {
         let predictionPrices = predictionsData[ticker];
-        let avgPredictionPrice = predictionPrices.reduce((a, b) => a + b, 0) / predictionPrices.length;
+        let avgPredictionPrice =
+          predictionPrices.reduce((a, b) => a + b, 0) / predictionPrices.length;
         let currentPrice = stockPrices[ticker] || "N/A";
-        let potentialMove = currentPrice !== "N/A" ? ((avgPredictionPrice - currentPrice) / currentPrice) * 100 : "N/A";
+        let potentialMove =
+          currentPrice !== "N/A"
+            ? ((avgPredictionPrice - currentPrice) / currentPrice) * 100
+            : "N/A";
 
+        // Build a new row
         let row = document.createElement("tr");
         row.innerHTML = `
-            <td>${ticker}</td>
-            <td>${currentPrice !== "N/A" ? "$" + currentPrice.toFixed(2) : "N/A"}</td>
-            <td>$${avgPredictionPrice.toFixed(2)}</td>
-            <td>${potentialMove !== "N/A" ? potentialMove.toFixed(2) + "%" : "N/A"}</td>
-            <td>${predictionPrices.length}</td>
+          <td>${ticker}</td>
+          <td>${currentPrice !== "N/A" ? "$" + currentPrice.toFixed(2) : "N/A"}</td>
+          <td>$${avgPredictionPrice.toFixed(2)}</td>
+          <td>${potentialMove !== "N/A" ? potentialMove.toFixed(2) + "%" : "N/A"}</td>
+          <td>${predictionPrices.length}</td>
         `;
-        row.addEventListener("click", () => renderPriceTargetChart(ticker, predictionPrices, currentPrice));
+        // Clicking a row updates the Price Target chart
+        row.addEventListener("click", () => {
+          // Also show the current price in the “Current Market Price” label
+          showCurrentPrice(ticker);
+          renderPriceTargetChart(ticker, predictionPrices, currentPrice);
+        });
         predictionsBody.appendChild(row);
-    });
-}
+      });
+    }
 
-// Render price target number line
-function renderPriceTargetChart(ticker, predictions, currentPrice) {
-    let minPrice = Math.min(...predictions);
-    let maxPrice = Math.max(...predictions);
-    let avgPrice = predictions.reduce((a, b) => a + b, 0) / predictions.length;
+    // Render the improved price target number line
+    function renderPriceTargetChart(ticker, predictions, currentPrice) {
+      // Basic stats
+      let minPrice = Math.min(...predictions);
+      let maxPrice = Math.max(...predictions);
+      let avgPrice = predictions.reduce((a, b) => a + b, 0) / predictions.length;
 
-    let chartContainer = document.getElementById("priceTargetChart");
-    chartContainer.innerHTML = `
+      // Avoid divide-by-zero if all predictions are the same
+      if (minPrice === maxPrice) {
+        maxPrice = minPrice + 0.01;
+      }
+
+      // A helper to map a price to 0-100%
+      function getPercentage(price) {
+        let pct = ((price - minPrice) / (maxPrice - minPrice)) * 100;
+        // Clamp so labels don't run off the edges
+        pct = Math.max(0, Math.min(100, pct));
+        return pct;
+      }
+
+      const minPct = getPercentage(minPrice);
+      const maxPct = getPercentage(maxPrice); // should be ~100%
+      const avgPct = getPercentage(avgPrice);
+      const currPct =
+        currentPrice !== "N/A" ? getPercentage(currentPrice) : avgPct; // fallback if N/A
+
+      // Build the HTML for the number line
+      let chartContainer = document.getElementById("priceTargetChart");
+      chartContainer.innerHTML = `
         <h4>${ticker} Price Targets</h4>
         <div class="number-line">
-            <div class="marker" style="left: 5%;">$${minPrice} (Low)</div>
-            <div class="marker" style="left: 50%; font-weight: bold;">$${avgPrice.toFixed(2)} (Avg)</div>
-            <div class="marker" style="left: 95%;">$${maxPrice} (High)</div>
-            <div class="marker" style="left: ${((currentPrice - minPrice) / (maxPrice - minPrice)) * 100}%; color: red;">$${currentPrice} (Current)</div>
+          <!-- Min label -->
+          <div class="marker" style="left: ${minPct}%;">
+            $${minPrice.toFixed(2)} (Low)
+          </div>
+          <!-- Avg label -->
+          <div class="marker" style="left: ${avgPct}%;">
+            $${avgPrice.toFixed(2)} (Avg)
+          </div>
+          <!-- Max label -->
+          <div class="marker" style="left: ${maxPct}%;">
+            $${maxPrice.toFixed(2)} (High)
+          </div>
+          <!-- Current label -->
+          ${
+            currentPrice !== "N/A"
+              ? `<div class="marker marker-current" style="left: ${currPct}%;">
+                  $${currentPrice.toFixed(2)} (Current)
+                 </div>`
+              : ""
+          }
         </div>
-    `;
-}
-</script>
+      `;
+    }
+  </script>
 </body>
 </html>
