@@ -44,6 +44,14 @@
         .negative {
             color: red;
         }
+        #clearAllBtn {
+            margin-top: 10px;
+            padding: 8px 15px;
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -70,6 +78,8 @@
             <!-- Predictions will be added here dynamically -->
         </tbody>
     </table>
+
+    <button id="clearAllBtn" onclick="clearAllPredictions()">Clear All Predictions</button>
 
     <script>
         // Predefined stock prices from trade sheet
@@ -103,6 +113,14 @@
             'MFS': 0.52, 'LAB': 1.26, 'TROPICAL': 2.93, 'TTECH': 1.52
         };
 
+        // Load existing predictions from localStorage on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            const savedPredictions = JSON.parse(localStorage.getItem('stockPredictions') || '[]');
+            savedPredictions.forEach(pred => {
+                addPredictionToTable(pred.ticker, pred.currentPrice, pred.predictionPrice);
+            });
+        });
+
         function addPrediction() {
             const tickerInput = document.getElementById('tickerInput');
             const priceInput = document.getElementById('priceInput');
@@ -122,6 +140,24 @@
                 return;
             }
 
+            // Add prediction to table
+            addPredictionToTable(ticker, currentPrice, predictionPrice);
+
+            // Save to localStorage
+            const savedPredictions = JSON.parse(localStorage.getItem('stockPredictions') || '[]');
+            savedPredictions.push({
+                ticker: ticker,
+                currentPrice: currentPrice,
+                predictionPrice: predictionPrice
+            });
+            localStorage.setItem('stockPredictions', JSON.stringify(savedPredictions));
+
+            // Clear inputs
+            tickerInput.value = '';
+            priceInput.value = '';
+        }
+
+        function addPredictionToTable(ticker, currentPrice, predictionPrice) {
             // Calculate potential upside/downside
             const upsideDownside = ((predictionPrice - currentPrice) / currentPrice * 100).toFixed(2);
             const dollarGainLoss = (predictionPrice - currentPrice).toFixed(2);
@@ -157,13 +193,28 @@
             const deleteButton = document.createElement('button');
             deleteButton.textContent = 'Delete';
             deleteButton.onclick = function() {
+                // Remove from table
                 predictionsBody.deleteRow(newRow.rowIndex - 1);
+                
+                // Remove from localStorage
+                const savedPredictions = JSON.parse(localStorage.getItem('stockPredictions') || '[]');
+                const updatedPredictions = savedPredictions.filter(pred => 
+                    !(pred.ticker === ticker && 
+                      pred.currentPrice === currentPrice && 
+                      pred.predictionPrice === predictionPrice)
+                );
+                localStorage.setItem('stockPredictions', JSON.stringify(updatedPredictions));
             };
             actionCell.appendChild(deleteButton);
+        }
 
-            // Clear inputs
-            tickerInput.value = '';
-            priceInput.value = '';
+        function clearAllPredictions() {
+            // Clear table
+            const predictionsBody = document.getElementById('predictionsBody');
+            predictionsBody.innerHTML = '';
+
+            // Clear localStorage
+            localStorage.removeItem('stockPredictions');
         }
     </script>
 </body>
