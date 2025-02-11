@@ -1,7 +1,67 @@
-// Load tickers and prices from JSON
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JSE Sentiment Analysis</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+        .chart-container {
+            width: 600px;
+            margin: 20px auto;
+        }
+        .number-line {
+            width: 100%;
+            height: 50px;
+            position: relative;
+            border-top: 2px solid black;
+        }
+        .marker {
+            position: absolute;
+            top: -10px;
+            text-align: center;
+            transform: translateX(-50%);
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+
+<h1>JSE Sentiment Analysis</h1>
+
+<!-- Input for stock ticker -->
+<input type="text" id="tickerInput" placeholder="Enter Stock Ticker (e.g. ECL)">
+<input type="number" id="priceInput" placeholder="1-Year Price Prediction ($)">
+<button id="submitPrediction">Submit Prediction</button>
+
+<p id="errorMessage" style="color:red;"></p>
+<p id="currentPriceDisplay" style="color:green;"></p>
+
+<table border="1">
+    <thead>
+        <tr>
+            <th>Ticker</th>
+            <th>Current Price ($)</th>
+            <th>Avg Prediction Price ($)</th>
+            <th>Potential Upside/Downside (%)</th>
+            <th>Prediction Count</th>
+        </tr>
+    </thead>
+    <tbody id="predictionsBody"></tbody>
+</table>
+
+<div class="chart-container">
+    <h3>Price Target Range</h3>
+    <div id="priceTargetChart"></div>
+</div>
+
+<script>
+// Fetch tickers and market prices
 const tickersUrl = "https://raw.githubusercontent.com/matthewpres/JSE-Sentiment/main/tickers.json";
 let stockPrices = {};
-
 fetch(tickersUrl)
     .then(response => response.json())
     .then(data => {
@@ -12,35 +72,32 @@ fetch(tickersUrl)
     })
     .catch(error => console.error("Error loading tickers:", error));
 
-// Update autocomplete with tickers
+// Update autocomplete
 function updateAutocomplete() {
-    const tickerInput = document.getElementById("tickerInput");
-    const datalist = document.getElementById("tickerList");
-    datalist.innerHTML = "";
+    let tickerInput = document.getElementById("tickerInput");
+    let datalist = document.createElement("datalist");
+    datalist.id = "tickerList";
     Object.keys(stockPrices).forEach(ticker => {
         let option = document.createElement("option");
         option.value = ticker;
         datalist.appendChild(option);
     });
+    tickerInput.appendChild(datalist);
 }
 
 // Show market price when ticker is selected
 function showCurrentPrice(ticker) {
     const price = stockPrices[ticker];
     document.getElementById("currentPriceDisplay").textContent =
-        price ? `Current Market Price: $${price.toFixed(2)}` : "Market price not available";
+        price !== undefined ? `Current Market Price: $${price.toFixed(2)}` : "Market price not available";
 }
 
-document.getElementById("tickerInput").addEventListener("input", function () {
-    showCurrentPrice(this.value.toUpperCase());
-});
-
 // Submit prediction
-function addPrediction() {
+document.getElementById("submitPrediction").addEventListener("click", function () {
     const ticker = document.getElementById("tickerInput").value.toUpperCase();
     const predictionPrice = parseFloat(document.getElementById("priceInput").value);
     const errorMessageEl = document.getElementById("errorMessage");
-    
+
     if (!ticker || isNaN(predictionPrice) || !(ticker in stockPrices)) {
         errorMessageEl.textContent = "Invalid ticker or missing price.";
         return;
@@ -48,12 +105,13 @@ function addPrediction() {
 
     console.log("Prediction added:", { ticker, predictionPrice });
 
-    predictionsRef.push({
-        ticker: ticker,
-        currentPrice: stockPrices[ticker],
-        predictionPrice: predictionPrice,
-        timestamp: firebase.database.ServerValue.TIMESTAMP
-    });
+    // Store prediction in localStorage
+    let storedPredictions = JSON.parse(localStorage.getItem("predictions")) || {};
+    if (!storedPredictions[ticker]) {
+        storedPredictions[ticker] = [];
+    }
+    storedPredictions[ticker].push(predictionPrice);
+    localStorage.setItem("predictions", JSON.stringify(storedPredictions));
 
     errorMessageEl.textContent = "Prediction submitted successfully!";
     errorMessageEl.style.color = "green";
@@ -61,81 +119,50 @@ function addPrediction() {
     document.getElementById("priceInput").value = "";
 
     renderPredictionTable();
-}
+});
 
-document.getElementById("submitPrediction").addEventListener("click", addPrediction);
-
-// Render predictions
+// Render prediction table
 function renderPredictionTable() {
-    predictionsRef.once("value", snapshot => {
-        const predictionsData = snapshot.val();
-        const predictionsBody = document.getElementById("predictionsBody");
-        predictionsBody.innerHTML = "";
-        
-        let aggregatedPredictions = {};
-        
-        Object.values(predictionsData || {}).forEach(entry => {
-            if (!aggregatedPredictions[entry.ticker]) {
-                aggregatedPredictions[entry.ticker] = { count: 0, total: 0, min: entry.predictionPrice, max: entry.predictionPrice };
-            }
-            let record = aggregatedPredictions[entry.ticker];
-            record.count++;
-            record.total += entry.predictionPrice;
-            record.min = Math.min(record.min, entry.predictionPrice);
-            record.max = Math.max(record.max, entry.predictionPrice);
-        });
+    let predictionsData = JSON.parse(localStorage.getItem("predictions")) || {};
+    let predictionsBody = document.getElementById("predictionsBody");
+    predictionsBody.innerHTML = "";
 
-        Object.keys(aggregatedPredictions).forEach(ticker => {
-            let record = aggregatedPredictions[ticker];
-            let avgPrice = record.total / record.count;
-            let currentPrice = stockPrices[ticker] || "N/A";
-            let row = document.createElement("tr");
-            row.innerHTML = `
-                <td>${ticker}</td>
-                <td>${currentPrice !== "N/A" ? `$${currentPrice.toFixed(2)}` : "N/A"}</td>
-                <td>$${avgPrice.toFixed(2)}</td>
-                <td>${currentPrice !== "N/A" ? `${((avgPrice - currentPrice) / currentPrice * 100).toFixed(2)}%` : "N/A"}</td>
-                <td>${record.count}</td>
-            `;
-            row.addEventListener("click", () => renderPriceTargetChart(ticker, record.min, avgPrice, record.max, currentPrice));
-            predictionsBody.appendChild(row);
-        });
+    Object.keys(predictionsData).forEach(ticker => {
+        let predictionPrices = predictionsData[ticker];
+        let avgPredictionPrice = predictionPrices.reduce((a, b) => a + b, 0) / predictionPrices.length;
+        let currentPrice = stockPrices[ticker] || "N/A";
+        let potentialMove = currentPrice !== "N/A" ? ((avgPredictionPrice - currentPrice) / currentPrice) * 100 : "N/A";
+
+        let row = document.createElement("tr");
+        row.innerHTML = `
+            <td>${ticker}</td>
+            <td>${currentPrice !== "N/A" ? "$" + currentPrice.toFixed(2) : "N/A"}</td>
+            <td>$${avgPredictionPrice.toFixed(2)}</td>
+            <td>${potentialMove !== "N/A" ? potentialMove.toFixed(2) + "%" : "N/A"}</td>
+            <td>${predictionPrices.length}</td>
+        `;
+        row.addEventListener("click", () => renderPriceTargetChart(ticker, predictionPrices, currentPrice));
+        predictionsBody.appendChild(row);
     });
 }
 
-// Render price target chart
-function renderPriceTargetChart(ticker, min, avg, max, currentPrice) {
-    const chartContainer = document.getElementById("priceTargetChart");
-    chartContainer.innerHTML = `<h3>Price Target Range for ${ticker}</h3>`;
-    
-    const canvas = document.createElement("canvas");
-    chartContainer.appendChild(canvas);
-    
-    new Chart(canvas, {
-        type: "scatter",
-        data: {
-            datasets: [{
-                label: "Price Targets",
-                data: [
-                    { x: min, y: 0 },
-                    { x: avg, y: 0 },
-                    { x: max, y: 0 },
-                    { x: currentPrice, y: 0 }
-                ],
-                backgroundColor: ["black", "blue", "black", "green"],
-                pointRadius: [5, 7, 5, 7],
-            }]
-        },
-        options: {
-            scales: {
-                x: {
-                    type: "linear",
-                    position: "bottom"
-                },
-                y: {
-                    display: false
-                }
-            }
-        }
-    });
+// Render price target number line
+function renderPriceTargetChart(ticker, predictions, currentPrice) {
+    let minPrice = Math.min(...predictions);
+    let maxPrice = Math.max(...predictions);
+    let avgPrice = predictions.reduce((a, b) => a + b, 0) / predictions.length;
+
+    let chartContainer = document.getElementById("priceTargetChart");
+    chartContainer.innerHTML = `
+        <h4>${ticker} Price Targets</h4>
+        <div class="number-line">
+            <div class="marker" style="left: 5%;">$${minPrice} (Low)</div>
+            <div class="marker" style="left: 50%; font-weight: bold;">$${avgPrice.toFixed(2)} (Avg)</div>
+            <div class="marker" style="left: 95%;">$${maxPrice} (High)</div>
+            <div class="marker" style="left: ${((currentPrice - minPrice) / (maxPrice - minPrice)) * 100}%; color: red;">$${currentPrice} (Current)</div>
+        </div>
+    `;
 }
+</script>
+</body>
+</html>
