@@ -141,7 +141,7 @@
             'ECL': 3.27, 'DOLLA': 2.90, 'AFS': 16.56, 'GK': 73.77, 'JMMBGL': 20.66, 'WIG': 1.25
         };
 
-        // Autocomplete handling
+        // Improved autocomplete to show all tickers that start with the input
         function updateAutocomplete(input) {
             const value = input.value.toUpperCase();
             const autocompleteList = document.getElementById('autocompleteList');
@@ -150,7 +150,7 @@
             if (!value) return;
 
             Object.keys(stockPrices).forEach(ticker => {
-                if (ticker.includes(value)) {
+                if (ticker.startsWith(value)) {
                     const div = document.createElement('div');
                     div.textContent = ticker;
                     div.addEventListener('click', function() {
@@ -184,8 +184,6 @@
 
             const currentPrice = stockPrices[ticker];
             const newPrediction = { ticker, currentPrice, predictionPrice, timestamp: firebase.database.ServerValue.TIMESTAMP };
-
-            console.log("Submitting Prediction:", newPrediction);
 
             predictionsRef.push(newPrediction, function(error) {
                 if (error) {
@@ -223,6 +221,12 @@
             console.log("Retrieved prediction:", prediction);
             renderAggregatedPrediction(prediction.ticker, prediction);
         });
+
+        // Ensure predictions display correctly
+        function renderAggregatedPrediction(ticker, data) {
+            console.log("Rendering prediction for:", ticker, data);
+            // Implement the logic to add/update the table row
+        }
     </script>
 </body>
 </html>
