@@ -135,55 +135,40 @@
         const database = firebase.database();
         const predictionsRef = database.ref('stock_predictions');
 
-        <script>
-    let stockPrices = {};
+        let stockPrices = {};
 
-    async function fetchStockPrices() {
-        try {
-            const response = await fetch("https://raw.githubusercontent.com/matthewpres/JSE-Sentiment/main/tickers.json");
-            stockPrices = await response.json();
-            console.log("Stock Prices Loaded:", stockPrices);
-        } catch (error) {
-            console.error("Error fetching tickers:", error);
-        }
-    }
-
-    fetchStockPrices(); // Fetch tickers on page load
-
-    function updateAutocomplete() {
-        const value = document.getElementById('tickerInput').value.toUpperCase();
-        const autocompleteList = document.getElementById('autocompleteList');
-        autocompleteList.innerHTML = '';
-
-        if (!value) return;
-
-        Object.keys(stockPrices).forEach(ticker => {
-            if (ticker.startsWith(value)) {
-                const div = document.createElement('div');
-                div.textContent = ticker;
-                div.addEventListener('click', function() {
-                    document.getElementById('tickerInput').value = ticker;
-                    showCurrentPrice(ticker);
-                    autocompleteList.innerHTML = '';
-                });
-                autocompleteList.appendChild(div);
+        async function fetchStockPrices() {
+            try {
+                const response = await fetch("https://raw.githubusercontent.com/matthewpres/JSE-Sentiment/main/tickers.json");
+                stockPrices = await response.json();
+                console.log("Stock Prices Loaded:", stockPrices);
+            } catch (error) {
+                console.error("Error fetching tickers:", error);
             }
-        });
-    }
+        }
 
-    function showCurrentPrice(ticker) {
-        const price = stockPrices[ticker];
-        document.getElementById('currentPriceDisplay').textContent = price !== undefined 
-            ? `Current Market Price: $${price.toFixed(2)}` 
-            : 'Market price not available';
-    }
+        fetchStockPrices(); // Fetch tickers on page load
 
-    document.getElementById('tickerInput').addEventListener('input', function() {
-        updateAutocomplete();
-        showCurrentPrice(this.value.toUpperCase());
-    });
-</script>
+        function updateAutocomplete() {
+            const value = document.getElementById('tickerInput').value.toUpperCase();
+            const autocompleteList = document.getElementById('autocompleteList');
+            autocompleteList.innerHTML = '';
 
+            if (!value) return;
+
+            Object.keys(stockPrices).forEach(ticker => {
+                if (ticker.startsWith(value)) {
+                    const div = document.createElement('div');
+                    div.textContent = ticker;
+                    div.addEventListener('click', function() {
+                        document.getElementById('tickerInput').value = ticker;
+                        showCurrentPrice(ticker);
+                        autocompleteList.innerHTML = '';
+                    });
+                    autocompleteList.appendChild(div);
+                }
+            });
+        }
 
         function showCurrentPrice(ticker) {
             const price = stockPrices[ticker];
