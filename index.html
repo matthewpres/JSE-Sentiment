@@ -44,17 +44,25 @@
         .negative {
             color: red;
         }
-        #clearAllBtn {
-            margin-top: 10px;
-            padding: 8px 15px;
-            background-color: #dc3545;
-            color: white;
-            border: none;
-            cursor: pointer;
+        #userNamePrompt {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            background: #f0f0f0;
+            padding: 10px;
+            text-align: center;
+            z-index: 1000;
         }
     </style>
 </head>
 <body>
+    <div id="userNamePrompt">
+        <label for="usernameInput">Enter Your Name/Username: </label>
+        <input type="text" id="usernameInput">
+        <button onclick="setUsername()">Submit</button>
+    </div>
+
     <h2>JSE Sentiment Analysis</h2>
     
     <div class="input-container">
@@ -66,12 +74,12 @@
     <table id="predictionsTable">
         <thead>
             <tr>
+                <th>Predictor</th>
                 <th>Ticker</th>
                 <th>Current Price ($)</th>
                 <th>Prediction Price ($)</th>
                 <th>Potential Upside/Downside (%)</th>
                 <th>Potential $ Gain/Loss</th>
-                <th>Action</th>
             </tr>
         </thead>
         <tbody id="predictionsBody">
@@ -79,9 +87,27 @@
         </tbody>
     </table>
 
-    <button id="clearAllBtn" onclick="clearAllPredictions()">Clear All Predictions</button>
+    <script type="module">
+        // Import the functions you need from the SDKs you need
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-app.js";
+        import { getDatabase, ref, push, onChildAdded, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.3.0/firebase-database.js";
 
-    <script>
+        // Your web app's Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyAp2QQErI9LtACfXuktlX-5847Rt8JWPfM",
+            authDomain: "jse-sentiment-analysis.firebaseapp.com",
+            databaseURL: "https://jse-sentiment-analysis-default-rtdb.firebaseio.com",
+            projectId: "jse-sentiment-analysis",
+            storageBucket: "jse-sentiment-analysis.appspot.com",
+            messagingSenderId: "225282121975",
+            appId: "1:225282121975:web:29bd14c63a4c11fc66b3f2"
+        };
+
+        // Initialize Firebase
+        const app = initializeApp(firebaseConfig);
+        const database = getDatabase(app);
+        const predictionsRef = ref(database, 'stock_predictions');
+
         // Predefined stock prices from trade sheet
         const stockPrices = {
             '138SL': 4.07, 'ASBH': 30.00, 'BIL': 73.00, 'BRG': 8.10, 
@@ -113,15 +139,35 @@
             'MFS': 0.52, 'LAB': 1.26, 'TROPICAL': 2.93, 'TTECH': 1.52
         };
 
-        // Load existing predictions from localStorage on page load
-        document.addEventListener('DOMContentLoaded', () => {
-            const savedPredictions = JSON.parse(localStorage.getItem('stockPredictions') || '[]');
-            savedPredictions.forEach(pred => {
-                addPredictionToTable(pred.ticker, pred.currentPrice, pred.predictionPrice);
-            });
+        let username = '';
+
+        // Listen for new predictions
+        onChildAdded(predictionsRef, (snapshot) => {
+            const prediction = snapshot.val();
+            addPredictionToTable(
+                prediction.username,
+                prediction.ticker, 
+                prediction.currentPrice, 
+                prediction.predictionPrice
+            );
         });
 
-        function addPrediction() {
+        // Expose functions to global scope
+        window.setUsername = function() {
+            username = document.getElementById('usernameInput').value.trim();
+            if (!username) {
+                alert('Please enter a username');
+                return;
+            }
+            document.getElementById('userNamePrompt').style.display = 'none';
+        }
+
+        window.addPrediction = function() {
+            if (!username) {
+                alert('Please set your username first');
+                return;
+            }
+
             const tickerInput = document.getElementById('tickerInput');
             const priceInput = document.getElementById('priceInput');
             const ticker = tickerInput.value.toUpperCase().replace(/\s+/g, '');
@@ -140,81 +186,54 @@
                 return;
             }
 
-            // Add prediction to table
-            addPredictionToTable(ticker, currentPrice, predictionPrice);
-
-            // Save to localStorage
-            const savedPredictions = JSON.parse(localStorage.getItem('stockPredictions') || '[]');
-            savedPredictions.push({
+            // Push prediction to Firebase
+            push(predictionsRef, {
+                username: username,
                 ticker: ticker,
                 currentPrice: currentPrice,
-                predictionPrice: predictionPrice
+                predictionPrice: predictionPrice,
+                timestamp: serverTimestamp()
             });
-            localStorage.setItem('stockPredictions', JSON.stringify(savedPredictions));
 
             // Clear inputs
             tickerInput.value = '';
             priceInput.value = '';
         }
 
-        function addPredictionToTable(ticker, currentPrice, predictionPrice) {
+        function addPredictionToTable(predictor, ticker, currentPrice, predictionPrice) {
             // Calculate potential upside/downside
             const upsideDownside = ((predictionPrice - currentPrice) / currentPrice * 100).toFixed(2);
             const dollarGainLoss = (predictionPrice - currentPrice).toFixed(2);
 
             // Create new row in predictions table
             const predictionsBody = document.getElementById('predictionsBody');
-            const newRow = predictionsBody.insertRow();
+            const newRow = predictionsBody.insertRow(0); // Insert at top
             
+            // Predictor cell
+            const predictorCell = newRow.insertCell(0);
+            predictorCell.textContent = predictor;
+
             // Ticker cell
-            const tickerCell = newRow.insertCell(0);
+            const tickerCell = newRow.insertCell(1);
             tickerCell.textContent = ticker;
 
             // Current Price cell
-            const currentPriceCell = newRow.insertCell(1);
-            currentPriceCell.textContent = `$${currentPrice.toFixed(2)}`;
+            const currentPriceCell = newRow.insertCell(2);
+            currentPriceCell.textContent = `$${parseFloat(currentPrice).toFixed(2)}`;
 
             // Prediction Price cell
-            const predictionPriceCell = newRow.insertCell(2);
-            predictionPriceCell.textContent = `$${predictionPrice.toFixed(2)}`;
+            const predictionPriceCell = newRow.insertCell(3);
+            predictionPriceCell.textContent = `$${parseFloat(predictionPrice).toFixed(2)}`;
 
             // Upside/Downside cell
-            const upsideDownsideCell = newRow.insertCell(3);
+            const upsideDownsideCell = newRow.insertCell(4);
             upsideDownsideCell.textContent = `${upsideDownside}%`;
             upsideDownsideCell.classList.add(upsideDownside >= 0 ? 'positive' : 'negative');
 
             // Dollar Gain/Loss cell
-            const dollarGainLossCell = newRow.insertCell(4);
+            const dollarGainLossCell = newRow.insertCell(5);
             dollarGainLossCell.textContent = `$${dollarGainLoss}`;
             dollarGainLossCell.classList.add(dollarGainLoss >= 0 ? 'positive' : 'negative');
-
-            // Action cell
-            const actionCell = newRow.insertCell(5);
-            const deleteButton = document.createElement('button');
-            deleteButton.textContent = 'Delete';
-            deleteButton.onclick = function() {
-                // Remove from table
-                predictionsBody.deleteRow(newRow.rowIndex - 1);
-                
-                // Remove from localStorage
-                const savedPredictions = JSON.parse(localStorage.getItem('stockPredictions') || '[]');
-                const updatedPredictions = savedPredictions.filter(pred => 
-                    !(pred.ticker === ticker && 
-                      pred.currentPrice === currentPrice && 
-                      pred.predictionPrice === predictionPrice)
-                );
-                localStorage.setItem('stockPredictions', JSON.stringify(updatedPredictions));
-            };
-            actionCell.appendChild(deleteButton);
-        }
-
-        function clearAllPredictions() {
-            // Clear table
-            const predictionsBody = document.getElementById('predictionsBody');
-            predictionsBody.innerHTML = '';
-
-            // Clear localStorage
-            localStorage.removeItem('stockPredictions');
         }
     </script>
 </body>
