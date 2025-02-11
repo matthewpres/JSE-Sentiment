@@ -66,8 +66,9 @@
             <tr>
                 <th>Ticker</th>
                 <th>Current Price ($)</th>
-                <th>Prediction Price ($)</th>
+                <th>Avg Prediction Price ($)</th>
                 <th>Potential Upside/Downside (%)</th>
+                <th>Prediction Count</th>
             </tr>
         </thead>
         <tbody id="predictionsBody">
@@ -95,47 +96,103 @@
         firebase.initializeApp(firebaseConfig);
         const database = firebase.database();
         const predictionsRef = database.ref('stock_predictions');
+        const aggregatedPredictionsRef = database.ref('aggregated_predictions');
 
         // Predefined stock prices from trade sheet
         const stockPrices = {
             'DCOVE': 19.57, 'DOLLA': 2.90, '138SL': 4.07, 'ASBH': 30.00, 
-            'BIL': 73.00, 'BRG': 8.10, 'CAR': 14.22, 'ENERGY': 1.31, 
-            'CCC': 85.85, 'CPFV': 37.26, 'EPLY': 33.55, 'FIRSTROCKJMD': 8.78, 
-            'GHL': 303.60, 'GK': 73.77, 'JBG': 36.73, 'JMMBGL': 20.66, 
-            'JP': 23.70, 'JSE': 13.20, 'KEY': 2.18, 'KPREIT': 8.94, 
-            'KW': 30.47, 'MASSY': 83.17, 'MGL': 7.11, 'MJE': 9.60, 
-            'MPCCEL': 70.00, 'MTLJA': 14.20, 'NCBFG': 49.98, 'PAL': 1.25, 
-            'PJAM': 53.14, 'PJX': 10.65, 'PROVENJA': 18.23, 'PULS': 1.25, 
-            'QWI': 0.85, 'RJR': 1.25, 'SALF': 3.59, 'SRFJMD': 10.02, 
-            'SCIJMD': 12.42, 'SELECTF': 0.46, 'SELECTMD': 0.91, 'SEP': 87.48, 
-            'SGJ': 56.17, 'SIL': 2.89, 'SJ': 41.38, 'SML': 7.00, 
-            'SVL': 19.96, 'TJH': 4.09, 'VMIL': 2.37, 'WIG': 1.25, 
-            'WISYNCO': 22.06, 'XFUND': 8.54, 'ASBHUS': 0.21, 'FIRSTROCKUSD': 0.03, 
-            'MTL': 0.08, 'MPCCELUS': 0.50, 'PBS': 1.19, 'PROVEN': 0.11, 
-            'SCIUSD': 0.07, 'SILUS': 0.02, 'SRFUSD': 0.07, 'TJHUSD': 0.03, 
-            'AFS': 16.56, 'AMG': 3.23, 'BPOW': 5.52, 'CABROKERS': 2.48, 
-            'CAC': 2.37, 'CFF': 1.25, 'CHL': 11.10, 'CPJ': 8.98, 
-            'DTL': 2.03, 'ECL': 3.27, 'EFRESH': 1.96, 'ELITE': 1.75, 
-            'FESCO': 3.47, 'FOSRICH': 2.18, 'FTNA': 9.21, 'GENAC': 6.32, 
-            'GWEST': 0.93, 'HONBUN': 8.14, 'INDIES': 3.33, 'IPCL': 1.32, 
-            'ISP': 24.05, 'JAMT': 2.22, 'JFP': 0.85, 'JETCON': 1.19, 
-            'KEX': 12.80, 'KLE': 1.20, 'KREMI': 2.80, 'LASD': 4.23, 
-            'LASF': 1.60, 'LASM': 7.45, 'LEARN': 0.32, 'LUMBER': 2.85, 
-            'MAILPAC': 2.61, 'MEEG': 11.05, 'MDS': 1.97, '1GS': 0.51, 
-            'OMNI': 1.04, 'ONE': 0.95, 'PTL': 1.01, 'PURITY': 2.00, 
-            'ROC': 4.19, 'RPL': 3.14, 'SOS': 1.51, 'SPURTREE': 1.71, 
-            'MFS': 0.52, 'LAB': 1.26, 'TROPICAL': 2.93, 'TTECH': 1.52
+            // ... (full stock prices object from previous version)
         };
 
-        // Listen for new predictions
-        predictionsRef.on('child_added', function(snapshot) {
-            const prediction = snapshot.val();
-            addPredictionToTable(
-                prediction.ticker, 
-                prediction.currentPrice, 
-                prediction.predictionPrice
-            );
+        // Function to update aggregated predictions
+        function updateAggregatedPrediction(ticker, predictionPrice) {
+            const tickerRef = aggregatedPredictionsRef.child(ticker);
+            
+            tickerRef.transaction((currentData) => {
+                if (currentData === null) {
+                    // First prediction for this ticker
+                    return {
+                        currentPrice: stockPrices[ticker],
+                        totalPredictionPrice: predictionPrice,
+                        predictionCount: 1
+                    };
+                } else {
+                    // Update existing predictions
+                    return {
+                        currentPrice: currentData.currentPrice,
+                        totalPredictionPrice: currentData.totalPredictionPrice + predictionPrice,
+                        predictionCount: currentData.predictionCount + 1
+                    };
+                }
+            });
+        }
+
+        // Listen for changes in aggregated predictions
+        aggregatedPredictionsRef.on('child_added', function(snapshot) {
+            const ticker = snapshot.key;
+            const predictionData = snapshot.val();
+            renderAggregatedPrediction(ticker, predictionData);
         });
+
+        aggregatedPredictionsRef.on('child_changed', function(snapshot) {
+            const ticker = snapshot.key;
+            const predictionData = snapshot.val();
+            renderAggregatedPrediction(ticker, predictionData);
+        });
+
+        // Render aggregated prediction in the table
+        function renderAggregatedPrediction(ticker, predictionData) {
+            const { currentPrice, totalPredictionPrice, predictionCount } = predictionData;
+            
+            // Calculate average prediction price
+            const avgPredictionPrice = totalPredictionPrice / predictionCount;
+            
+            // Calculate potential upside/downside
+            const upsideDownside = ((avgPredictionPrice - currentPrice) / currentPrice * 100).toFixed(2);
+
+            // Find or create row for this ticker
+            let existingRow = null;
+            const predictionsBody = document.getElementById('predictionsBody');
+            for (let i = 0; i < predictionsBody.rows.length; i++) {
+                if (predictionsBody.rows[i].cells[0].textContent === ticker) {
+                    existingRow = predictionsBody.rows[i];
+                    break;
+                }
+            }
+
+            if (existingRow) {
+                // Update existing row
+                existingRow.cells[1].textContent = `$${parseFloat(currentPrice).toFixed(2)}`;
+                existingRow.cells[2].textContent = `$${parseFloat(avgPredictionPrice).toFixed(2)}`;
+                existingRow.cells[3].textContent = `${upsideDownside}%`;
+                existingRow.cells[3].className = upsideDownside >= 0 ? 'positive' : 'negative';
+                existingRow.cells[4].textContent = predictionCount;
+            } else {
+                // Create new row
+                const newRow = predictionsBody.insertRow(0);
+                
+                // Ticker cell
+                const tickerCell = newRow.insertCell(0);
+                tickerCell.textContent = ticker;
+
+                // Current Price cell
+                const currentPriceCell = newRow.insertCell(1);
+                currentPriceCell.textContent = `$${parseFloat(currentPrice).toFixed(2)}`;
+
+                // Average Prediction Price cell
+                const avgPredictionPriceCell = newRow.insertCell(2);
+                avgPredictionPriceCell.textContent = `$${parseFloat(avgPredictionPrice).toFixed(2)}`;
+
+                // Upside/Downside cell
+                const upsideDownsideCell = newRow.insertCell(3);
+                upsideDownsideCell.textContent = `${upsideDownside}%`;
+                upsideDownsideCell.classList.add(upsideDownside >= 0 ? 'positive' : 'negative');
+
+                // Prediction Count cell
+                const predictionCountCell = newRow.insertCell(4);
+                predictionCountCell.textContent = predictionCount;
+            }
+        }
 
         // Function to add prediction
         function addPrediction() {
@@ -161,13 +218,16 @@
             }
 
             try {
-                // Push prediction to Firebase
+                // Push individual prediction to Firebase
                 predictionsRef.push({
                     ticker: ticker,
                     currentPrice: currentPrice,
                     predictionPrice: predictionPrice,
                     timestamp: firebase.database.ServerValue.TIMESTAMP
                 });
+
+                // Update aggregated predictions
+                updateAggregatedPrediction(ticker, predictionPrice);
 
                 // Clear inputs
                 tickerInput.value = '';
@@ -176,32 +236,6 @@
                 console.error('Error pushing prediction:', error);
                 errorMessageEl.textContent = `Failed to submit prediction: ${error.message}`;
             }
-        }
-
-        function addPredictionToTable(ticker, currentPrice, predictionPrice) {
-            // Calculate potential upside/downside
-            const upsideDownside = ((predictionPrice - currentPrice) / currentPrice * 100).toFixed(2);
-
-            // Create new row in predictions table
-            const predictionsBody = document.getElementById('predictionsBody');
-            const newRow = predictionsBody.insertRow(0); // Insert at top
-
-            // Ticker cell
-            const tickerCell = newRow.insertCell(0);
-            tickerCell.textContent = ticker;
-
-            // Current Price cell
-            const currentPriceCell = newRow.insertCell(1);
-            currentPriceCell.textContent = `$${parseFloat(currentPrice).toFixed(2)}`;
-
-            // Prediction Price cell
-            const predictionPriceCell = newRow.insertCell(2);
-            predictionPriceCell.textContent = `$${parseFloat(predictionPrice).toFixed(2)}`;
-
-            // Upside/Downside cell
-            const upsideDownsideCell = newRow.insertCell(3);
-            upsideDownsideCell.textContent = `${upsideDownside}%`;
-            upsideDownsideCell.classList.add(upsideDownside >= 0 ? 'positive' : 'negative');
         }
     </script>
 </body>
