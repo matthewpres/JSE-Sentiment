@@ -136,39 +136,25 @@
         const predictionsRef = database.ref('stock_predictions');
         const aggregatedPredictionsRef = database.ref('aggregated_predictions');
 
-        // Stock prices data
+        // Stock prices (Ensure all are included)
         const stockPrices = {
-            'ECL': 3.27, 'DOLLA': 2.90, 'GK': 73.77, 'WIG': 1.25, 'JMMBGL': 20.66
+            'ECL': 3.27, 'DOLLA': 2.90, 'AFS': 16.56, 'GK': 73.77, 'JMMBGL': 20.66, 'WIG': 1.25
         };
 
-        // Setup autocomplete
-        const tickerInput = document.getElementById('tickerInput');
-        const currentPriceDisplay = document.getElementById('currentPriceDisplay');
-
-        function showCurrentPrice(ticker) {
-            const price = stockPrices[ticker];
-            if (price !== undefined) {
-                currentPriceDisplay.textContent = `Current Market Price: $${price.toFixed(2)}`;
-            } else {
-                currentPriceDisplay.textContent = '';
-            }
-        }
-
+        // Autocomplete handling
         function updateAutocomplete(input) {
             const value = input.value.toUpperCase();
             const autocompleteList = document.getElementById('autocompleteList');
             autocompleteList.innerHTML = '';
 
-            if (!value) {
-                return false;
-            }
+            if (!value) return;
 
             Object.keys(stockPrices).forEach(ticker => {
                 if (ticker.includes(value)) {
                     const div = document.createElement('div');
                     div.textContent = ticker;
                     div.addEventListener('click', function() {
-                        tickerInput.value = ticker;
+                        document.getElementById('tickerInput').value = ticker;
                         showCurrentPrice(ticker);
                         autocompleteList.innerHTML = '';
                     });
@@ -177,67 +163,66 @@
             });
         }
 
-        tickerInput.addEventListener('input', function() {
+        function showCurrentPrice(ticker) {
+            const price = stockPrices[ticker];
+            document.getElementById('currentPriceDisplay').textContent = price !== undefined ? `Current Market Price: $${price.toFixed(2)}` : '';
+        }
+
+        document.getElementById('tickerInput').addEventListener('input', function() {
             updateAutocomplete(this);
             showCurrentPrice(this.value.toUpperCase());
         });
 
-        document.addEventListener('click', function(e) {
-            if (e.target !== tickerInput) {
-                document.getElementById('autocompleteList').innerHTML = '';
-            }
-        });
-
         function addPrediction() {
-            const errorMessageEl = document.getElementById('errorMessage');
-            errorMessageEl.textContent = '';
-
-            const ticker = tickerInput.value.toUpperCase();
+            const ticker = document.getElementById('tickerInput').value.toUpperCase();
             const predictionPrice = parseFloat(document.getElementById('priceInput').value);
 
-            if (!ticker || !predictionPrice) {
-                errorMessageEl.textContent = 'Please enter both ticker and prediction price';
+            if (!ticker || isNaN(predictionPrice) || stockPrices[ticker] === undefined) {
+                document.getElementById('errorMessage').textContent = 'Invalid ticker or missing price.';
                 return;
             }
 
             const currentPrice = stockPrices[ticker];
-            if (currentPrice === undefined) {
-                errorMessageEl.textContent = 'Invalid stock ticker.';
-                return;
-            }
+            const newPrediction = { ticker, currentPrice, predictionPrice, timestamp: firebase.database.ServerValue.TIMESTAMP };
 
-            predictionsRef.push({
-                ticker: ticker,
-                currentPrice: currentPrice,
-                predictionPrice: predictionPrice,
-                timestamp: firebase.database.ServerValue.TIMESTAMP
+            console.log("Submitting Prediction:", newPrediction);
+
+            predictionsRef.push(newPrediction, function(error) {
+                if (error) {
+                    console.error('Firebase Error:', error);
+                    document.getElementById('errorMessage').textContent = 'Error submitting prediction.';
+                } else {
+                    console.log('Prediction saved successfully!');
+                    updateAggregatedPrediction(ticker, predictionPrice);
+                    document.getElementById('tickerInput').value = '';
+                    document.getElementById('priceInput').value = '';
+                    document.getElementById('currentPriceDisplay').textContent = '';
+                    document.getElementById('errorMessage').textContent = 'Prediction submitted successfully!';
+                    document.getElementById('errorMessage').style.color = 'green';
+                }
             });
-
-            updateAggregatedPrediction(ticker, predictionPrice);
-            tickerInput.value = '';
-            document.getElementById('priceInput').value = '';
-            currentPriceDisplay.textContent = '';
-            errorMessageEl.textContent = 'Prediction submitted successfully!';
-            errorMessageEl.style.color = 'green';
         }
 
         function updateAggregatedPrediction(ticker, predictionPrice) {
             const tickerRef = aggregatedPredictionsRef.child(ticker);
             tickerRef.transaction(currentData => {
-                if (!currentData) {
-                    return {
-                        currentPrice: stockPrices[ticker],
-                        totalPredictionPrice: predictionPrice,
-                        predictionCount: 1
-                    };
-                }
-                return {
+                return currentData ? {
                     currentPrice: currentData.currentPrice,
                     totalPredictionPrice: currentData.totalPredictionPrice + predictionPrice,
                     predictionCount: currentData.predictionCount + 1
+                } : {
+                    currentPrice: stockPrices[ticker],
+                    totalPredictionPrice: predictionPrice,
+                    predictionCount: 1
                 };
             });
         }
+
+        predictionsRef.on('child_added', function(snapshot) {
+            const prediction = snapshot.val();
+            console.log("Retrieved prediction:", prediction);
+            renderAggregatedPrediction(prediction.ticker, prediction);
+        });
     </script>
 </body>
 </html>
