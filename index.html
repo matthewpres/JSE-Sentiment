@@ -1,182 +1,52 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>JSE Sentiment Analysis</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-        .input-container {
-            display: flex;
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        .ticker-section {
-            flex-grow: 1;
-            position: relative;
-        }
-        .price-section {
-            flex-grow: 1;
-        }
-        .input-container input {
-            width: 100%;
-            padding: 8px;
-            box-sizing: border-box;
-        }
-        .input-container button {
-            padding: 8px 15px;
-            background-color: #007bff;
-            color: white;
-            border: none;
-            cursor: pointer;
-        }
-        .autocomplete-items {
-            position: absolute;
-            border: 1px solid #ddd;
-            border-top: none;
-            z-index: 99;
-            top: 100%;
-            left: 0;
-            right: 0;
-            max-height: 200px;
-            overflow-y: auto;
-            background-color: white;
-        }
-        .autocomplete-items div {
-            padding: 10px;
-            cursor: pointer;
-        }
-        .autocomplete-items div:hover {
-            background-color: #e9e9e9;
-        }
-        .current-price-display {
-            margin-top: 5px;
-            font-size: 0.9em;
-            color: #666;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 20px;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-        th {
-            background-color: #f2f2f2;
-        }
-        .positive {
-            color: green;
-        }
-        .negative {
-            color: red;
-        }
-        #errorMessage {
-            color: red;
-            margin-top: 10px;
-        }
-    </style>
-</head>
-<body>
-    <h2>JSE Sentiment Analysis</h2>
-    
-    <div class="input-container">
-        <div class="ticker-section">
-            <input type="text" id="tickerInput" placeholder="Enter Stock Ticker (e.g. ECL)" autocomplete="off">
-            <div id="autocompleteList" class="autocomplete-items"></div>
-            <div id="currentPriceDisplay" class="current-price-display"></div>
-        </div>
-        <div class="price-section">
-            <input type="number" id="priceInput" placeholder="1-Year Price Prediction ($)" step="0.01">
-        </div>
-        <button onclick="addPrediction()">Submit Prediction</button>
-    </div>
+<script>
+    let stockPrices = {};
 
-    <div id="errorMessage"></div>
+    async function fetchStockPrices() {
+        try {
+            const response = await fetch("https://raw.githubusercontent.com/matthewpres/JSE-Sentiment/refs/heads/main/tickers.json");
+            stockPrices = await response.json();
+            console.log("Stock Prices Loaded:", stockPrices);
+        } catch (error) {
+            console.error("Error fetching tickers:", error);
+        }
+    }
 
-    <table id="predictionsTable">
-        <thead>
-            <tr>
-                <th>Ticker</th>
-                <th>Current Price ($)</th>
-                <th>Avg Prediction Price ($)</th>
-                <th>Potential Upside/Downside (%)</th>
-                <th>Prediction Count</th>
-            </tr>
-        </thead>
-        <tbody id="predictionsBody">
-        </tbody>
-    </table>
+    fetchStockPrices(); // Fetch tickers on page load
 
-    <!-- Firebase SDK -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    function updateAutocomplete() {
+        const value = document.getElementById('tickerInput').value.toUpperCase();
+        const autocompleteList = document.getElementById('autocompleteList');
+        autocompleteList.innerHTML = '';
 
-    <script>
-        // Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyAp2QQErI9LtACfXuktlX-5847Rt8JWPfM",
-            authDomain: "jse-sentiment-analysis.firebaseapp.com",
-            databaseURL: "https://jse-sentiment-analysis-default-rtdb.firebaseio.com",
-            projectId: "jse-sentiment-analysis",
-            storageBucket: "jse-sentiment-analysis.appspot.com",
-            messagingSenderId: "225282121975",
-            appId: "1:225282121975:web:29bd14c63a4c11fc66b3f2"
-        };
+        if (!value) return;
 
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        const database = firebase.database();
-        const predictionsRef = database.ref('stock_predictions');
+        Object.keys(stockPrices).forEach(ticker => {
+            if (ticker.startsWith(value)) {
+                const div = document.createElement('div');
+                div.textContent = ticker;
+                div.addEventListener('click', function() {
+                    document.getElementById('tickerInput').value = ticker;
+                    autocompleteList.innerHTML = '';
+                });
+                autocompleteList.appendChild(div);
+            }
+        });
+    }
 
-        // Full list of stock tickers
-        const stockPrices = {
-            '138SL': 4.07, '1GS': 0.51, 'AFS': 16.56, 'AMG': 3.23, 'ASBH': 30.00, 'BIL': 73.00,
-            'BPOW': 5.52, 'BRG': 8.10, 'CAC': 2.37, 'CAR': 14.22, 'CCC': 85.85, 'CHL': 11.10,
-            'CPFV': 37.26, 'CPJ': 8.98, 'DCOVE': 19.57, 'DOLLA': 2.90, 'DTL': 2.03, 'ECL': 3.27,
-            'EFRESH': 1.96, 'ELITE': 1.75, 'ENERGY': 1.31, 'EPLY': 33.55, 'FESCO': 3.47, 
-            'FIRSTROCKJMD': 8.78, 'FOSRICH': 2.18, 'GENAC': 6.32, 'GK': 73.77, 'JSE': 13.20, 
-            'JMMBGL': 20.66, 'JP': 23.70, 'KEX': 12.80, 'KEY': 2.18, 'LASM': 7.45, 'MDS': 1.97, 
-            'NCBFG': 49.98, 'PJAM': 53.14, 'PJX': 10.65, 'PROVENJA': 18.23, 'SALF': 3.59, 
-            'SCIJMD': 12.42, 'SELECTF': 0.46, 'SEP': 87.48, 'SGJ': 56.17, 'SIL': 2.89, 
-            'SML': 7.00, 'SVL': 19.96, 'TJH': 4.09, 'VMIL': 2.37, 'WIG': 1.25, 'WISYNCO': 22.06 
-        };
+    function addPrediction() {
+        const ticker = document.getElementById('tickerInput').value.toUpperCase();
+        const predictionPrice = parseFloat(document.getElementById('priceInput').value);
+        const errorMessageEl = document.getElementById('errorMessage');
 
-        // Update autocomplete suggestions
-        function updateAutocomplete() {
-            const value = document.getElementById('tickerInput').value.toUpperCase();
-            const autocompleteList = document.getElementById('autocompleteList');
-            autocompleteList.innerHTML = '';
-
-            if (!value) return;
-
-            Object.keys(stockPrices).forEach(ticker => {
-                if (ticker.startsWith(value)) {
-                    const div = document.createElement('div');
-                    div.textContent = ticker;
-                    div.addEventListener('click', function() {
-                        document.getElementById('tickerInput').value = ticker;
-                        showCurrentPrice(ticker);
-                        autocompleteList.innerHTML = '';
-                    });
-                    autocompleteList.appendChild(div);
-                }
-            });
+        if (!ticker || isNaN(predictionPrice) || !(ticker in stockPrices)) {
+            errorMessageEl.textContent = 'Invalid ticker or missing price.';
+            return;
         }
 
-        function showCurrentPrice(ticker) {
-            const price = stockPrices[ticker];
-            document.getElementById('currentPriceDisplay').textContent = price !== undefined ? `Current Market Price: $${price.toFixed(2)}` : '';
-        }
+        console.log("Prediction added:", { ticker, predictionPrice });
+        errorMessageEl.textContent = "Prediction submitted successfully!";
+        errorMessageEl.style.color = "green";
+    }
 
-        document.getElementById('tickerInput').addEventListener('input', updateAutocomplete);
-        
-    </script>
-</body>
-</html>
+    document.getElementById('tickerInput').addEventListener('input', updateAutocomplete);
+</script>
