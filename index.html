@@ -145,4 +145,255 @@
       apiKey: "AIzaSyAp2QQErI9LtACfXuktlX-5847Rt8JWPfM",
       authDomain: "jse-sentiment-analysis.firebaseapp.com",
       databaseURL: "https://jse-sentiment-analysis-default-rtdb.firebaseio.com",
-      project
+      projectId: "jse-sentiment-analysis",
+      storageBucket: "jse-sentiment-analysis.appspot.com",
+      messagingSenderId: "225282121975",
+      appId: "1:225282121975:web:29bd14c63a4c11fc66b3f2",
+      measurementId: "G-VLGXC41LME"
+    };
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    getAnalytics(app);
+    const db = getDatabase(app);
+
+    /***************************************************
+     * STEP C: Load tickers from GitHub
+     ***************************************************/
+    const tickersUrl = "https://raw.githubusercontent.com/matthewpres/JSE-Sentiment/main/tickers.json";
+    let stockPrices = {};
+
+    fetch(tickersUrl)
+      .then(res => res.json())
+      .then(data => {
+        stockPrices = data;
+        console.log("Loaded stock prices:", data);
+        updateAutocomplete();
+      })
+      .catch(err => console.error("Error loading tickers:", err));
+
+    function updateAutocomplete() {
+      const tickerInput = document.getElementById("tickerInput");
+      const datalist = document.createElement("datalist");
+      datalist.id = "tickerList";
+
+      Object.keys(stockPrices).forEach(ticker => {
+        let option = document.createElement("option");
+        option.value = ticker;
+        datalist.appendChild(option);
+      });
+
+      tickerInput.setAttribute("list", "tickerList");
+      document.body.appendChild(datalist);
+    }
+
+    /***************************************************
+     * STEP D: Listen to Realtime Database: /predictions
+     ***************************************************/
+    const predictionsRef = ref(db, "predictions");
+    onValue(predictionsRef, (snapshot) => {
+      const data = snapshot.val() || {};
+      // Convert from { TICKER: {key1:{price}, key2:{price}}, ... } 
+      // to { TICKER: [price1, price2, ...], ... }
+      let predictionsMap = {};
+
+      Object.keys(data).forEach(ticker => {
+        let entries = data[ticker];
+        let priceArray = Object.keys(entries).map(k => entries[k].price);
+        predictionsMap[ticker] = priceArray;
+      });
+
+      // Re-render the table with the updated predictions
+      renderPredictionTable(predictionsMap);
+    });
+
+    /***************************************************
+     * STEP E: Submitting a new prediction
+     ***************************************************/
+    document.getElementById("submitPrediction").addEventListener("click", () => {
+      const ticker = document.getElementById("tickerInput").value.toUpperCase();
+      const predictionPrice = parseFloat(document.getElementById("priceInput").value);
+      const errorMessageEl = document.getElementById("errorMessage");
+
+      if (!ticker || isNaN(predictionPrice) || !(ticker in stockPrices)) {
+        errorMessageEl.textContent = "Invalid ticker or missing price.";
+        errorMessageEl.style.color = "red";
+        return;
+      }
+
+      // Push to /predictions/<TICKER>
+      const tickerRef = ref(db, "predictions/" + ticker);
+      push(tickerRef, {
+        price: predictionPrice,
+        timestamp: Date.now()
+      })
+      .then(() => {
+        errorMessageEl.textContent = "Prediction submitted successfully!";
+        errorMessageEl.style.color = "green";
+        document.getElementById("tickerInput").value = "";
+        document.getElementById("priceInput").value = "";
+      })
+      .catch(err => {
+        console.error("Error submitting prediction:", err);
+        errorMessageEl.textContent = "Error submitting prediction.";
+        errorMessageEl.style.color = "red";
+      });
+    });
+
+    /***************************************************
+     * STEP F: Render the table
+     ***************************************************/
+    function renderPredictionTable(predictionsMap) {
+      const predictionsBody = document.getElementById("predictionsBody");
+      predictionsBody.innerHTML = "";
+
+      Object.keys(predictionsMap).forEach(ticker => {
+        let priceArray = predictionsMap[ticker];
+        let avgPredictionPrice = priceArray.reduce((a, b) => a + b, 0) / priceArray.length;
+
+        let currentPrice = stockPrices[ticker] || "N/A";
+        let potentialMove = "N/A";
+        if (currentPrice !== "N/A") {
+          potentialMove = ((avgPredictionPrice - currentPrice) / currentPrice) * 100;
+        }
+
+        // Create the main row
+        let row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${ticker}</td>
+          <td>${currentPrice !== "N/A" ? "$" + currentPrice.toFixed(2) : "N/A"}</td>
+          <td>$${avgPredictionPrice.toFixed(2)}</td>
+          <td>${potentialMove !== "N/A" ? potentialMove.toFixed(2) + "%" : "N/A"}</td>
+          <td>${priceArray.length}</td>
+        `;
+
+        // This second row will hold the "dropdown" chart
+        // We'll build it dynamically, and keep it hidden initially
+        let chartRow = document.createElement("tr");
+        chartRow.classList.add("chartRow");
+        let chartCell = document.createElement("td");
+        chartCell.colSpan = 5; // span all table columns
+        chartCell.innerHTML = `
+          <div class="chart-container">
+            <!-- We'll fill this in once the user clicks the main row -->
+          </div>
+        `;
+        chartRow.appendChild(chartCell);
+
+        // On main row click, toggle the chart row
+        row.addEventListener("click", () => {
+          // If it's hidden, show it; otherwise hide it
+          if (chartRow.style.display === "table-row") {
+            chartRow.style.display = "none";
+          } else {
+            chartRow.style.display = "table-row";
+            // Render the chart inside the chartContainer
+            let containerDiv = chartCell.querySelector(".chart-container");
+            containerDiv.innerHTML = ""; // clear old contents
+            containerDiv.appendChild(renderPriceTargetChart(
+              ticker,
+              priceArray,
+              currentPrice
+            ));
+          }
+        });
+
+        // Append the two rows
+        predictionsBody.appendChild(row);
+        predictionsBody.appendChild(chartRow);
+      });
+    }
+
+    function showCurrentPrice(ticker) {
+      const price = stockPrices[ticker];
+      document.getElementById("currentPriceDisplay").textContent =
+        price !== undefined
+          ? `Current Market Price: $${price.toFixed(2)}`
+          : "Market price not available";
+    }
+
+    /***************************************************
+     * STEP G: Build a "Yahoo-like" price target chart
+     ***************************************************/
+    function renderPriceTargetChart(ticker, predictions, currentPrice) {
+      let minPrice = Math.min(...predictions);
+      let maxPrice = Math.max(...predictions);
+      let avgPrice = predictions.reduce((a, b) => a + b, 0) / predictions.length;
+
+      // Avoid divide-by-zero if all predictions identical
+      if (minPrice === maxPrice) {
+        maxPrice = minPrice + 0.01;
+      }
+
+      // Map a numeric price to a 0-100% offset
+      function getPct(price) {
+        let pct = ((price - minPrice) / (maxPrice - minPrice)) * 100;
+        return Math.min(100, Math.max(0, pct));
+      }
+
+      let container = document.createElement("div");
+      container.className = "chart-container";
+
+      // Title or label
+      let title = document.createElement("div");
+      title.className = "chart-title";
+      title.textContent = `Analyst Price Targets for ${ticker}`;
+      container.appendChild(title);
+
+      // The track
+      let track = document.createElement("div");
+      track.className = "price-range-track";
+      container.appendChild(track);
+
+      // Create dots for min, avg, max, current
+      // We'll label them similarly to Yahoo
+      // 1) Low
+      let lowPct = getPct(minPrice);
+      track.appendChild(createDot(lowPct, minPrice, "Low"));
+
+      // 2) High
+      let highPct = getPct(maxPrice);
+      track.appendChild(createDot(highPct, maxPrice, "High"));
+
+      // 3) Avg
+      let avgPct = getPct(avgPrice);
+      track.appendChild(createDot(avgPct, avgPrice, "Average"));
+
+      // 4) Current (only if not "N/A")
+      if (currentPrice !== "N/A") {
+        let currPct = getPct(currentPrice);
+        track.appendChild(createDot(currPct, currentPrice, "Current", true));
+      }
+
+      return container;
+    }
+
+    /***************************************************
+     * Helper: create a labeled dot
+     ***************************************************/
+    function createDot(percent, priceValue, labelText, isCurrent=false) {
+      // Dot
+      let dot = document.createElement("div");
+      dot.className = "price-dot" + (isCurrent ? " current" : "");
+      dot.style.left = percent + "%";
+
+      // Label
+      let label = document.createElement("div");
+      label.className = "price-label" + (isCurrent ? " current" : "");
+      label.textContent = `$${priceValue.toFixed(2)} (${labelText})`;
+      // Position label above or slightly offset
+      label.style.left = percent + "%";
+
+      // We'll put them inside a fragment or a container
+      let fragment = document.createElement("div");
+      fragment.style.position = "absolute";
+      fragment.style.left = 0;
+      fragment.style.right = 0;
+      fragment.style.top = 0;
+      // Add the dot and label
+      fragment.appendChild(dot);
+      fragment.appendChild(label);
+      return fragment;
+    }
+  </script>
+</body>
+</html>
