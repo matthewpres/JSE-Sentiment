@@ -96,6 +96,15 @@
     .chartRow {
       display: none;
     }
+    /* We want a pointer cursor on the main row to show it’s clickable */
+    .clickable-row {
+      cursor: pointer;
+    }
+    /* Put a little margin on the arrow itself */
+    .arrow-icon {
+      margin-left: 6px;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
@@ -123,12 +132,9 @@
     <tbody id="predictionsBody"></tbody>
   </table>
 
-  <!-- We won't show the chart container here by default; 
-       each row will create its own "dropdown" below itself. -->
-
   <!-- 
     1) Firebase v9 "modular" SDK from CDN.
-    2) Must be served via HTTPS.
+    2) Must be served via HTTPS (GitHub Pages does).
   -->
   <script type="module">
     /***************************************************
@@ -258,42 +264,43 @@
 
         // Create the main row
         let row = document.createElement("tr");
+        // We'll store the arrow char in the 1st cell, along with the ticker
+        row.classList.add("clickable-row");
         row.innerHTML = `
-          <td>${ticker}</td>
+          <td>
+            ${ticker}
+            <span class="arrow-icon">&#x25BC;</span>  <!-- Down arrow by default -->
+          </td>
           <td>${currentPrice !== "N/A" ? "$" + currentPrice.toFixed(2) : "N/A"}</td>
           <td>$${avgPredictionPrice.toFixed(2)}</td>
           <td>${potentialMove !== "N/A" ? potentialMove.toFixed(2) + "%" : "N/A"}</td>
           <td>${priceArray.length}</td>
         `;
 
-        // This second row will hold the "dropdown" chart
-        // We'll build it dynamically, and keep it hidden initially
+        // Second row to hold the chart
         let chartRow = document.createElement("tr");
         chartRow.classList.add("chartRow");
         let chartCell = document.createElement("td");
         chartCell.colSpan = 5; // span all table columns
-        chartCell.innerHTML = `
-          <div class="chart-container">
-            <!-- We'll fill this in once the user clicks the main row -->
-          </div>
-        `;
+        chartCell.innerHTML = `<div class="chart-container"></div>`;
         chartRow.appendChild(chartCell);
 
         // On main row click, toggle the chart row
         row.addEventListener("click", () => {
-          // If it's hidden, show it; otherwise hide it
+          const arrowIcon = row.querySelector(".arrow-icon");
           if (chartRow.style.display === "table-row") {
             chartRow.style.display = "none";
+            arrowIcon.textContent = "▼"; // down arrow
           } else {
             chartRow.style.display = "table-row";
+            arrowIcon.textContent = "▲"; // up arrow
+
             // Render the chart inside the chartContainer
             let containerDiv = chartCell.querySelector(".chart-container");
             containerDiv.innerHTML = ""; // clear old contents
-            containerDiv.appendChild(renderPriceTargetChart(
-              ticker,
-              priceArray,
-              currentPrice
-            ));
+            containerDiv.appendChild(
+              renderPriceTargetChart(ticker, priceArray, currentPrice)
+            );
           }
         });
 
@@ -333,7 +340,7 @@
       let container = document.createElement("div");
       container.className = "chart-container";
 
-      // Title or label
+      // Title
       let title = document.createElement("div");
       title.className = "chart-title";
       title.textContent = `Analyst Price Targets for ${ticker}`;
@@ -383,7 +390,7 @@
       // Position label above or slightly offset
       label.style.left = percent + "%";
 
-      // We'll put them inside a fragment or a container
+      // We'll put them inside a fragment or container
       let fragment = document.createElement("div");
       fragment.style.position = "absolute";
       fragment.style.left = 0;
