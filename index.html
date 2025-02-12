@@ -4,16 +4,15 @@
   <meta charset="UTF-8" />
   <title>JSE Sentiment Analysis</title>
   <style>
-    /* Center a container of fixed max-width in the middle of the page */
+    /* Center the entire content */
     .page-container {
-      max-width: 900px;   /* adjust as you like: 800px, 1000px, etc. */
-      margin: 0 auto;     /* auto left/right margins center the container */
-      padding: 20px;      /* optional padding for breathing room */
+      max-width: 900px;   /* Adjust width as desired */
+      margin: 0 auto;     /* Center horizontally */
+      padding: 20px;
     }
 
     body {
       font-family: Arial, sans-serif;
-      /* We don't strictly need margin on <body> if .page-container has it */
       margin: 0;
       padding: 0;
       background-color: #fff;
@@ -21,7 +20,7 @@
 
     h1 {
       margin-bottom: 10px;
-      text-align: center; /* Headline centered for a nicer look */
+      text-align: center; 
     }
 
     input {
@@ -38,7 +37,8 @@
     table {
       margin-top: 15px;
       border-collapse: collapse;
-      width: 100%;     /* Let the table fill the container’s width */
+      width: 100%;
+      max-width: 100%;  /* Fill the container */
     }
     table thead {
       background-color: #f4f4f4;
@@ -57,7 +57,7 @@
     .chart-container {
       position: relative;
       margin-top: 8px;
-      padding: 10px 10px 30px 10px;
+      padding: 10px 10px 30px 10px;  /* extra space at bottom for labels */
       background-color: #fcfcfc;
       border: 1px solid #ccc;
       border-radius: 8px;
@@ -132,11 +132,10 @@
   </style>
 </head>
 <body>
-
   <div class="page-container">
     <h1>JSE Sentiment Analysis</h1>
 
-    <!-- Inputs for ticker + price prediction -->
+    <!-- Inputs -->
     <input type="text" id="tickerInput" placeholder="Enter Stock Ticker (e.g. ECL)" />
     <input type="number" id="priceInput" placeholder="1-Year Price Prediction ($)" />
     <button id="submitPrediction">Submit Prediction</button>
@@ -158,14 +157,20 @@
     </table>
   </div>
 
-  <!-- All the same JS logic as before, just wrapped in .page-container for centering. -->
   <script type="module">
+    /***************************************************
+     * STEP A: Import Firebase
+     ***************************************************/
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
     import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-analytics.js";
     import { getDatabase, ref, onValue, push } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-database.js";
 
+    /***************************************************
+     * STEP B: Your Firebase config
+     * (Replace with your real config from your Firebase console)
+     ***************************************************/
     const firebaseConfig = {
-      apiKey: "AIzaSy...",
+      apiKey: "YOUR_API_KEY_HERE",
       authDomain: "jse-sentiment-analysis.firebaseapp.com",
       databaseURL: "https://jse-sentiment-analysis-default-rtdb.firebaseio.com",
       projectId: "jse-sentiment-analysis",
@@ -174,13 +179,15 @@
       appId: "1:225282121975:web:29bd14c63a4c11fc66b3f2",
       measurementId: "G-VLGXC41LME"
     };
+
+    // Initialize Firebase
     const app = initializeApp(firebaseConfig);
     getAnalytics(app);
     const db = getDatabase(app);
 
-    // ...the rest of your code is unchanged (fetching tickers.json, etc.)...
-    // (Paste in the same logic for submitPrediction, onValue, renderPredictionTable, etc.)
-    
+    /***************************************************
+     * STEP C: Load tickers from GitHub
+     ***************************************************/
     const tickersUrl = "https://raw.githubusercontent.com/matthewpres/JSE-Sentiment/main/tickers.json";
     let stockPrices = {};
 
@@ -189,32 +196,243 @@
       .then(data => {
         stockPrices = data;
         updateAutocomplete();
+        console.log("Stock prices loaded:", stockPrices);
       })
       .catch(err => console.error("Error loading tickers:", err));
 
     function updateAutocomplete() {
-      // ...
+      const tickerInput = document.getElementById("tickerInput");
+      const datalist = document.createElement("datalist");
+      datalist.id = "tickerList";
+
+      Object.keys(stockPrices).forEach(ticker => {
+        let option = document.createElement("option");
+        option.value = ticker;
+        datalist.appendChild(option);
+      });
+      tickerInput.setAttribute("list", "tickerList");
+      document.body.appendChild(datalist);
     }
 
-    document.getElementById("submitPrediction").addEventListener("click", () => {
-      // ...
-    });
-
+    /***************************************************
+     * STEP D: Listen to Realtime Database: /predictions
+     ***************************************************/
     const predictionsRef = ref(db, "predictions");
     onValue(predictionsRef, (snapshot) => {
-      // ...
+      // If snapshot is empty or missing, we handle that gracefully
+      const data = snapshot.val() || {};
+      console.log("Loaded predictions data from Firebase:", data);
+
+      // Convert { TICKER: {key: {price}, key2: {price}}, ...} 
+      // into { TICKER: [price, price, ...], ... }
+      let predictionsMap = {};
+
+      Object.keys(data).forEach(ticker => {
+        let entries = data[ticker];
+        let priceArray = Object.keys(entries).map(k => entries[k].price);
+        predictionsMap[ticker] = priceArray;
+      });
+
+      // Re-render the table
+      renderPredictionTable(predictionsMap);
     });
 
+    /***************************************************
+     * STEP E: Submitting a new prediction
+     ***************************************************/
+    document.getElementById("submitPrediction").addEventListener("click", () => {
+      const ticker = document.getElementById("tickerInput").value.toUpperCase();
+      const predictionPrice = parseFloat(document.getElementById("priceInput").value);
+      const errorMessageEl = document.getElementById("errorMessage");
+
+      // Basic checks
+      if (!ticker || isNaN(predictionPrice) || !(ticker in stockPrices)) {
+        errorMessageEl.textContent = "Invalid ticker or missing price.";
+        errorMessageEl.style.color = "red";
+        return;
+      }
+      // Push to /predictions/<TICKER>
+      const tickerRef = ref(db, "predictions/" + ticker);
+      push(tickerRef, {
+        price: predictionPrice,
+        timestamp: Date.now()
+      })
+      .then(() => {
+        errorMessageEl.textContent = "Prediction submitted successfully!";
+        errorMessageEl.style.color = "green";
+        document.getElementById("tickerInput").value = "";
+        document.getElementById("priceInput").value = "";
+      })
+      .catch(err => {
+        console.error("Error submitting prediction:", err);
+        errorMessageEl.textContent = "Error submitting prediction.";
+        errorMessageEl.style.color = "red";
+      });
+    });
+
+    /***************************************************
+     * STEP F: Render the table
+     ***************************************************/
     function renderPredictionTable(predictionsMap) {
-      // ...
+      let predictionsBody = document.getElementById("predictionsBody");
+      predictionsBody.innerHTML = "";
+
+      Object.keys(predictionsMap).forEach(ticker => {
+        let priceArray = predictionsMap[ticker];
+        // Calculate average
+        let avg = priceArray.reduce((a, b) => a + b, 0) / priceArray.length;
+        let currentPrice = stockPrices[ticker] || "N/A";
+
+        let potentialMove = "N/A";
+        if (currentPrice !== "N/A") {
+          potentialMove = ((avg - currentPrice) / currentPrice) * 100;
+        }
+
+        // Build the row
+        let row = document.createElement("tr");
+        row.classList.add("clickable-row");
+
+        // First cell: arrow + ticker
+        let arrowCell = document.createElement("td");
+        arrowCell.classList.add("arrow-cell");
+        arrowCell.innerHTML = `
+          <span class="arrow-icon">&#x25BC;</span>
+          <span class="ticker-text">${ticker}</span>
+        `;
+
+        let curPriceCell = document.createElement("td");
+        curPriceCell.textContent = currentPrice !== "N/A"
+          ? "$" + currentPrice.toFixed(2)
+          : "N/A";
+
+        let avgCell = document.createElement("td");
+        avgCell.textContent = `$${avg.toFixed(2)}`;
+
+        let potCell = document.createElement("td");
+        potCell.textContent = potentialMove !== "N/A"
+          ? potentialMove.toFixed(2) + "%"
+          : "N/A";
+
+        let countCell = document.createElement("td");
+        countCell.textContent = priceArray.length;
+
+        row.appendChild(arrowCell);
+        row.appendChild(curPriceCell);
+        row.appendChild(avgCell);
+        row.appendChild(potCell);
+        row.appendChild(countCell);
+
+        // Second row: chart
+        let chartRow = document.createElement("tr");
+        chartRow.classList.add("chartRow");
+        let chartCell = document.createElement("td");
+        chartCell.colSpan = 5; // span all columns
+        chartCell.innerHTML = `<div class="chart-container"></div>`;
+        chartRow.appendChild(chartCell);
+
+        // Toggle chart on row click
+        row.addEventListener("click", () => {
+          const arrowIcon = arrowCell.querySelector(".arrow-icon");
+          if (chartRow.style.display === "table-row") {
+            chartRow.style.display = "none";
+            arrowIcon.textContent = "▼";
+          } else {
+            chartRow.style.display = "table-row";
+            arrowIcon.textContent = "▲";
+
+            let containerDiv = chartCell.querySelector(".chart-container");
+            containerDiv.innerHTML = "";
+            containerDiv.appendChild(
+              renderPriceTargetChart(ticker, priceArray, currentPrice)
+            );
+          }
+        });
+
+        predictionsBody.appendChild(row);
+        predictionsBody.appendChild(chartRow);
+      });
     }
 
+    /***************************************************
+     * STEP G: The Price Target Chart
+     ***************************************************/
     function renderPriceTargetChart(ticker, predictions, currentPrice) {
-      // ...
+      let minVal = Math.min(...predictions);
+      let maxVal = Math.max(...predictions);
+      let avgVal = predictions.reduce((a, b) => a + b, 0) / predictions.length;
+
+      // Expand min/max if current is outside
+      if (currentPrice !== "N/A") {
+        minVal = Math.min(minVal, currentPrice);
+        maxVal = Math.max(maxVal, currentPrice);
+      }
+      if (minVal === maxVal) {
+        maxVal = minVal + 0.01;
+      }
+
+      function getPct(price) {
+        return ((price - minVal) / (maxVal - minVal)) * 100;
+      }
+
+      let container = document.createElement("div");
+      container.className = "chart-container";
+
+      let title = document.createElement("div");
+      title.className = "chart-title";
+      title.textContent = `Analyst Price Targets for ${ticker}`;
+      container.appendChild(title);
+
+      let track = document.createElement("div");
+      track.className = "price-range-track";
+      container.appendChild(track);
+
+      // Low / Avg / High
+      let lowPct = getPct(Math.min(...predictions));
+      let avgPct = getPct(avgVal);
+      let highPct = getPct(Math.max(...predictions));
+
+      track.appendChild(createDot(lowPct, Math.min(...predictions), "Low"));
+      track.appendChild(createDot(avgPct, avgVal, "Average"));
+      track.appendChild(createDot(highPct, Math.max(...predictions), "High"));
+
+      // Current
+      if (currentPrice !== "N/A") {
+        let curPct = getPct(currentPrice);
+        let curDot = createDot(curPct, currentPrice, "Current", true);
+        track.appendChild(curDot);
+
+        // Overlap hack
+        let diffLow = Math.abs(curPct - lowPct);
+        let diffAvg = Math.abs(curPct - avgPct);
+        let diffHigh = Math.abs(curPct - highPct);
+        if (diffLow < 10 || diffAvg < 10 || diffHigh < 10) {
+          let curLabel = curDot.querySelector(".price-label");
+          curLabel.style.transform = "translate(-50%, -220%)";
+        }
+      }
+
+      return container;
     }
 
-    function createDot(percent, priceValue, labelText, isCurrent=false) {
-      // ...
+    function createDot(percent, val, labelText, isCurrent=false) {
+      let fragment = document.createElement("div");
+      fragment.style.position = "absolute";
+      fragment.style.left = 0;
+      fragment.style.right = 0;
+      fragment.style.top = 0;
+
+      let dot = document.createElement("div");
+      dot.className = "price-dot" + (isCurrent ? " current" : "");
+      dot.style.left = Math.max(0, Math.min(100, percent)) + "%";
+      fragment.appendChild(dot);
+
+      let label = document.createElement("div");
+      label.className = "price-label" + (isCurrent ? " current" : "");
+      label.textContent = `$${val.toFixed(2)} (${labelText})`;
+      label.style.left = Math.max(0, Math.min(100, percent)) + "%";
+      fragment.appendChild(label);
+
+      return fragment;
     }
   </script>
 </body>
