@@ -2,33 +2,17 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>JSE Sentiment Analysis (Firebase v9 Modular)</title>
+  <title>JSE Sentiment Analysis</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       margin: 20px;
     }
+    h1 {
+      margin-bottom: 10px;
+    }
     input {
       margin-right: 5px;
-    }
-    table {
-      margin-top: 15px;
-      border-collapse: collapse;
-      width: 100%;
-      max-width: 600px;
-    }
-    table thead {
-      background-color: #f4f4f4;
-    }
-    table th, table td {
-      padding: 8px 12px;
-      text-align: center;
-    }
-    table th {
-      border-bottom: 2px solid #ccc;
-    }
-    table td {
-      border-bottom: 1px solid #ccc;
     }
     #errorMessage {
       margin-top: 10px;
@@ -37,40 +21,88 @@
     #currentPriceDisplay {
       margin-top: 5px;
     }
-    .chart-container {
-      width: 600px;
-      margin: 40px auto;
-    }
-    .number-line {
-      position: relative;
+
+    table {
+      margin-top: 15px;
+      border-collapse: collapse;
       width: 100%;
+      max-width: 700px;
+    }
+    table thead {
+      background-color: #f4f4f4;
+    }
+    table th, table td {
+      padding: 8px 12px;
+      text-align: center;
+      border-bottom: 1px solid #ccc;
+    }
+    table th {
+      border-bottom: 2px solid #ccc;
+    }
+
+    /* A container for the chart */
+    .chart-container {
+      width: 100%;
+      padding: 15px;
+      background-color: #f9f9f9;
+      border: 1px solid #ccc;
+      margin-top: 10px;
+      position: relative;
+    }
+    .chart-title {
+      font-weight: bold;
+      margin-bottom: 10px;
+    }
+
+    /* The horizontal "track" for price targets (styled like Yahoo's) */
+    .price-range-track {
+      position: relative;
       height: 8px;
       background-color: #ccc;
       border-radius: 4px;
-      margin-top: 20px;
+      margin: 20px 0 15px 0;
     }
-    .marker {
+    /* Each "dot" on the track */
+    .price-dot {
       position: absolute;
-      top: -25px;
-      transform: translateX(-50%);
-      background: #fff;
-      border: 1px solid #ccc;
+      top: 50%;
+      width: 10px;
+      height: 10px;
+      background-color: #666;
+      border-radius: 50%;
+      transform: translate(-50%, -50%);
+    }
+    /* Label that pops above/below each dot */
+    .price-label {
+      position: absolute;
+      background-color: #fff;
+      border: 1px solid #aaa;
       border-radius: 3px;
-      padding: 2px 4px;
-      font-size: 14px;
+      padding: 3px 5px;
+      font-size: 13px;
+      transform: translate(-50%, -110%);
       white-space: nowrap;
     }
-    .marker-current {
+    /* Emphasize the current price dot */
+    .price-dot.current {
+      background-color: #d00;
+    }
+    .price-label.current {
       color: #d00;
       border-color: #d00;
       font-weight: bold;
     }
+    /* So the chart "row" is hidden by default */
+    .chartRow {
+      display: none;
+    }
   </style>
 </head>
 <body>
+
   <h1>JSE Sentiment Analysis</h1>
 
-  <!-- Inputs for user submission -->
+  <!-- Inputs for ticker + price prediction -->
   <input type="text" id="tickerInput" placeholder="Enter Stock Ticker (e.g. ECL)" />
   <input type="number" id="priceInput" placeholder="1-Year Price Prediction ($)" />
   <button id="submitPrediction">Submit Prediction</button>
@@ -78,7 +110,7 @@
   <p id="errorMessage"></p>
   <p id="currentPriceDisplay"></p>
 
-  <table>
+  <table id="predictionsTable">
     <thead>
       <tr>
         <th>Ticker</th>
@@ -91,226 +123,26 @@
     <tbody id="predictionsBody"></tbody>
   </table>
 
-  <div class="chart-container">
-    <h3>Price Target Range</h3>
-    <div id="priceTargetChart"></div>
-  </div>
+  <!-- We won't show the chart container here by default; 
+       each row will create its own "dropdown" below itself. -->
 
   <!-- 
-    1) Using ES modules for Firebase v9.
-    2) Make sure you serve this page via HTTPS (GitHub Pages does).
+    1) Firebase v9 "modular" SDK from CDN.
+    2) Must be served via HTTPS.
   -->
   <script type="module">
-    /********************************************************************
-     *  STEP A: Import only what we need from Firebase
-     ********************************************************************/
+    /***************************************************
+     * STEP A: Import Firebase v9 modules
+     ***************************************************/
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
     import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-analytics.js";
     import { getDatabase, ref, onValue, push } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-database.js";
 
-    /********************************************************************
-     *  STEP B: Your Firebase config
-     *  (Replace with your real config from Firebase console)
-     ********************************************************************/
+    /***************************************************
+     * STEP B: Your Firebase config
+     ***************************************************/
     const firebaseConfig = {
       apiKey: "AIzaSyAp2QQErI9LtACfXuktlX-5847Rt8JWPfM",
       authDomain: "jse-sentiment-analysis.firebaseapp.com",
       databaseURL: "https://jse-sentiment-analysis-default-rtdb.firebaseio.com",
-      projectId: "jse-sentiment-analysis",
-      storageBucket: "jse-sentiment-analysis.appspot.com",
-      messagingSenderId: "225282121975",
-      appId: "1:225282121975:web:29bd14c63a4c11fc66b3f2",
-      measurementId: "G-VLGXC41LME"
-    };
-
-    // Initialize Firebase
-    const app = initializeApp(firebaseConfig);
-    // (Optional) Initialize Analytics
-    getAnalytics(app);
-
-    // Get a reference to the Realtime Database
-    const db = getDatabase(app);
-
-    /********************************************************************
-     *  STEP C: Load tickers from your GitHub JSON
-     ********************************************************************/
-    const tickersUrl = "https://raw.githubusercontent.com/matthewpres/JSE-Sentiment/main/tickers.json";
-    let stockPrices = {};
-
-    fetch(tickersUrl)
-      .then(res => res.json())
-      .then(data => {
-        stockPrices = data;
-        console.log("Loaded stock prices:", data);
-        updateAutocomplete();
-      })
-      .catch(err => console.error("Error loading tickers:", err));
-
-    function updateAutocomplete() {
-      const tickerInput = document.getElementById("tickerInput");
-      const datalist = document.createElement("datalist");
-      datalist.id = "tickerList";
-
-      Object.keys(stockPrices).forEach(ticker => {
-        let option = document.createElement("option");
-        option.value = ticker;
-        datalist.appendChild(option);
-      });
-
-      tickerInput.setAttribute("list", "tickerList");
-      document.body.appendChild(datalist);
-    }
-
-    /********************************************************************
-     *  STEP D: Watch the entire /predictions node in Realtime DB
-     *  (That way, multiple users all see the same, live-updating data)
-     ********************************************************************/
-    const predictionsRef = ref(db, "predictions");
-
-    onValue(predictionsRef, (snapshot) => {
-      const data = snapshot.val() || {};
-      // data shape: { TICKER: { key1: {price, timestamp}, key2: {...} }, ... }
-      // Convert that to: { TICKER: [price1, price2, ...], ... }
-      let predictionsMap = {};
-
-      Object.keys(data).forEach(ticker => {
-        let entries = data[ticker]; // object of { key: {price, timestamp}, key2: {...} }
-        let priceArray = Object.keys(entries).map(k => entries[k].price);
-        predictionsMap[ticker] = priceArray;
-      });
-
-      renderPredictionTable(predictionsMap);
-    });
-
-    /********************************************************************
-     *  STEP E: Submit a new prediction → push to /predictions/ticker
-     ********************************************************************/
-    document.getElementById("submitPrediction").addEventListener("click", () => {
-      const ticker = document.getElementById("tickerInput").value.toUpperCase();
-      const predictionPrice = parseFloat(document.getElementById("priceInput").value);
-      const errorMessageEl = document.getElementById("errorMessage");
-
-      if (!ticker || isNaN(predictionPrice) || !(ticker in stockPrices)) {
-        errorMessageEl.textContent = "Invalid ticker or missing price.";
-        errorMessageEl.style.color = "red";
-        return;
-      }
-
-      // "push" a new child under /predictions/<ticker>
-      const tickerRef = ref(db, "predictions/" + ticker);
-      push(tickerRef, {
-        price: predictionPrice,
-        timestamp: Date.now()
-      }).then(() => {
-        errorMessageEl.textContent = "Prediction submitted successfully!";
-        errorMessageEl.style.color = "green";
-        // Clear inputs
-        document.getElementById("tickerInput").value = "";
-        document.getElementById("priceInput").value = "";
-      }).catch(err => {
-        console.error("Error submitting prediction:", err);
-        errorMessageEl.textContent = "Error submitting prediction.";
-        errorMessageEl.style.color = "red";
-      });
-    });
-
-    /********************************************************************
-     *  STEP F: Render the table from a { TICKER: [prices...] } object
-     ********************************************************************/
-    function renderPredictionTable(predictionsMap) {
-      const predictionsBody = document.getElementById("predictionsBody");
-      predictionsBody.innerHTML = "";
-
-      Object.keys(predictionsMap).forEach(ticker => {
-        let predictionPrices = predictionsMap[ticker];
-        let avgPredictionPrice = predictionPrices.reduce((a, b) => a + b, 0) / predictionPrices.length;
-
-        let currentPrice = stockPrices[ticker] || "N/A";
-        let potentialMove = "N/A";
-        if (currentPrice !== "N/A") {
-          potentialMove = ((avgPredictionPrice - currentPrice) / currentPrice) * 100;
-        }
-
-        let row = document.createElement("tr");
-        row.innerHTML = `
-          <td>${ticker}</td>
-          <td>${currentPrice !== "N/A" ? "$" + currentPrice.toFixed(2) : "N/A"}</td>
-          <td>$${avgPredictionPrice.toFixed(2)}</td>
-          <td>${potentialMove !== "N/A" ? potentialMove.toFixed(2) + "%" : "N/A"}</td>
-          <td>${predictionPrices.length}</td>
-        `;
-
-        // Clicking a row → show the price target chart
-        row.addEventListener("click", () => {
-          showCurrentPrice(ticker);
-          renderPriceTargetChart(ticker, predictionPrices, currentPrice);
-        });
-
-        predictionsBody.appendChild(row);
-      });
-    }
-
-    function showCurrentPrice(ticker) {
-      const price = stockPrices[ticker];
-      document.getElementById("currentPriceDisplay").textContent =
-        price !== undefined
-          ? `Current Market Price: $${price.toFixed(2)}`
-          : "Market price not available";
-    }
-
-    /********************************************************************
-     *  STEP G: Render the min/avg/max/current number-line chart
-     ********************************************************************/
-    function renderPriceTargetChart(ticker, predictions, currentPrice) {
-      let minPrice = Math.min(...predictions);
-      let maxPrice = Math.max(...predictions);
-      let avgPrice = predictions.reduce((a, b) => a + b, 0) / predictions.length;
-
-      // Handle case where all predictions are identical
-      if (minPrice === maxPrice) {
-        maxPrice = minPrice + 0.01;
-      }
-
-      function getPercentage(price) {
-        let pct = ((price - minPrice) / (maxPrice - minPrice)) * 100;
-        return Math.max(0, Math.min(100, pct));
-      }
-
-      const minPct = getPercentage(minPrice);
-      const maxPct = getPercentage(maxPrice); // ~100
-      const avgPct = getPercentage(avgPrice);
-      let currentPct = avgPct;
-      if (currentPrice !== "N/A") {
-        currentPct = getPercentage(currentPrice);
-      }
-
-      let chartContainer = document.getElementById("priceTargetChart");
-      chartContainer.innerHTML = `
-        <h4>${ticker} Price Targets</h4>
-        <div class="number-line">
-          <!-- Low -->
-          <div class="marker" style="left: ${minPct}%;">
-            $${minPrice.toFixed(2)} (Low)
-          </div>
-          <!-- Avg -->
-          <div class="marker" style="left: ${avgPct}%;">
-            $${avgPrice.toFixed(2)} (Avg)
-          </div>
-          <!-- High -->
-          <div class="marker" style="left: ${maxPct}%;">
-            $${maxPrice.toFixed(2)} (High)
-          </div>
-          <!-- Current -->
-          ${
-            currentPrice !== "N/A"
-              ? `<div class="marker marker-current" style="left: ${currentPct}%;">
-                   $${currentPrice.toFixed(2)} (Current)
-                 </div>`
-              : ""
-          }
-        </div>
-      `;
-    }
-  </script>
-</body>
-</html>
+      project
