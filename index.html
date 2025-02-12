@@ -50,8 +50,7 @@
       padding: 15px;
       background-color: #f9f9f9;
       border: 1px solid #ccc;
-      /* Increase minimum height so chart labels have space */
-      min-height: 140px;
+      min-height: 140px; /* extra space so labels don’t overlap too badly */
     }
     .chart-title {
       font-weight: bold;
@@ -66,8 +65,7 @@
       background-color: #ccc;
       border-radius: 4px;
       margin: 10px auto 15px auto;
-      /* Let’s ensure it’s “on bottom” so labels can be on top. */
-      z-index: 1;
+      z-index: 1; /* ensure it’s beneath the dots/labels */
     }
 
     /* Each "dot" on the track */
@@ -79,13 +77,13 @@
       background-color: #666;
       border-radius: 50%;
       transform: translate(-50%, -50%);
-      z-index: 2; /* ensure dot is above the track */
+      z-index: 2;
     }
 
     /* Label that pops above each dot */
     .price-label {
       position: absolute;
-      /* A bit higher than before to reduce overlap */
+      /* a bit higher to reduce collisions */
       transform: translate(-50%, -140%);
       background-color: #fff;
       border: 1px solid #aaa;
@@ -93,7 +91,7 @@
       padding: 3px 5px;
       font-size: 13px;
       white-space: nowrap;
-      z-index: 3; /* ensure label is above the dot */
+      z-index: 3;
     }
 
     /* Emphasize the current price dot */
@@ -116,7 +114,7 @@
       cursor: pointer;
     }
 
-    /* Put a little margin on the arrow itself */
+    /* Arrow icon to the left of ticker */
     .arrow-icon {
       margin-right: 6px;
       font-weight: bold;
@@ -344,16 +342,22 @@
         maxPrice = minPrice + 0.01;
       }
 
-      // Map a numeric price to a 0-100% offset
+      // Convert a numeric price to a 0-100% offset
       function getPct(price) {
         let pct = ((price - minPrice) / (maxPrice - minPrice)) * 100;
         return Math.max(0, Math.min(100, pct));
       }
 
+      // Calculate percentages
+      let lowPct = getPct(minPrice);
+      let highPct = getPct(maxPrice);
+      let avgPct = getPct(avgPrice);
+      let currPct = currentPrice !== "N/A" ? getPct(currentPrice) : null;
+
+      // Container
       let container = document.createElement("div");
       container.className = "chart-container";
 
-      // Title
       let title = document.createElement("div");
       title.className = "chart-title";
       title.textContent = `Analyst Price Targets for ${ticker}`;
@@ -364,25 +368,35 @@
       track.className = "price-range-track";
       container.appendChild(track);
 
-      // Create dots for min, avg, max, current
-      // 1) Low
-      let lowPct = getPct(minPrice);
-      track.appendChild(createDot(lowPct, minPrice, "Low"));
+      // Dots
+      let dotMin = createDot(lowPct, minPrice, "Low");
+      let dotAvg = createDot(avgPct, avgPrice, "Average");
+      let dotMax = createDot(highPct, maxPrice, "High");
 
-      // 2) High
-      let highPct = getPct(maxPrice);
-      track.appendChild(createDot(highPct, maxPrice, "High"));
+      track.appendChild(dotMin);
+      track.appendChild(dotAvg);
+      track.appendChild(dotMax);
 
-      // 3) Avg
-      let avgPct = getPct(avgPrice);
-      track.appendChild(createDot(avgPct, avgPrice, "Average"));
-
-      // 4) Current (only if not "N/A")
-      if (currentPrice !== "N/A") {
-        let currPct = getPct(currentPrice);
-        track.appendChild(createDot(currPct, currentPrice, "Current", true));
+      // If current is valid, create that dot
+      let dotCur = null;
+      if (currPct !== null) {
+        dotCur = createDot(currPct, currentPrice, "Current", true);
+        track.appendChild(dotCur);
       }
 
+      // --- Simple overlap hack: If "Current" is too close to the others, shift label further up ---
+      if (dotCur) {
+        let diffToMin = Math.abs(currPct - lowPct);
+        let diffToAvg = Math.abs(currPct - avgPct);
+        let diffToMax = Math.abs(currPct - highPct);
+
+        // If "Current" is within 10% of Min or Avg or Max, push the Current label higher
+        if (diffToMin < 10 || diffToAvg < 10 || diffToMax < 10) {
+          let label = dotCur.querySelector(".price-label");
+          // Shift up a bit more
+          label.style.transform = "translate(-50%, -220%)";
+        }
+      }
       return container;
     }
 
@@ -401,7 +415,7 @@
       label.textContent = `$${priceValue.toFixed(2)} (${labelText})`;
       label.style.left = percent + "%";
 
-      // We'll put them inside a fragment so we can absolute‐position them easily
+      // A container fragment so we can absolute‐position
       let fragment = document.createElement("div");
       fragment.style.position = "absolute";
       fragment.style.left = 0;
