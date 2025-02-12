@@ -4,13 +4,26 @@
   <meta charset="UTF-8" />
   <title>JSE Sentiment Analysis</title>
   <style>
+    /* Center a container of fixed max-width in the middle of the page */
+    .page-container {
+      max-width: 900px;   /* adjust as you like: 800px, 1000px, etc. */
+      margin: 0 auto;     /* auto left/right margins center the container */
+      padding: 20px;      /* optional padding for breathing room */
+    }
+
     body {
       font-family: Arial, sans-serif;
-      margin: 20px;
+      /* We don't strictly need margin on <body> if .page-container has it */
+      margin: 0;
+      padding: 0;
+      background-color: #fff;
     }
+
     h1 {
       margin-bottom: 10px;
+      text-align: center; /* Headline centered for a nicer look */
     }
+
     input {
       margin-right: 5px;
     }
@@ -25,53 +38,46 @@
     table {
       margin-top: 15px;
       border-collapse: collapse;
-      width: 100%;
-      max-width: 700px;
+      width: 100%;     /* Let the table fill the container’s width */
     }
     table thead {
       background-color: #f4f4f4;
     }
-    table th, table td {
+    table th,
+    table td {
       padding: 8px 12px;
       text-align: center;
-      vertical-align: middle; /* helps keep arrow/ticker aligned */
+      vertical-align: middle;
       border-bottom: 1px solid #ccc;
     }
     table th {
       border-bottom: 2px solid #ccc;
     }
 
-    /* Container for the chart with smaller size and round corners */
     .chart-container {
-      width: 100%;
       position: relative;
-      /* Increase bottom padding so we can push the track further down. */
-      padding: 10px 10px 30px 10px;
-      background-color: #fcfcfc; 
-      border: 1px solid #ccc;
-      border-radius: 8px; 
-      min-height: 120px; /* a bit more space so labels don't collide */
       margin-top: 8px;
+      padding: 10px 10px 30px 10px;
+      background-color: #fcfcfc;
+      border: 1px solid #ccc;
+      border-radius: 8px;
+      min-height: 120px;
     }
     .chart-title {
       font-weight: bold;
       text-align: center;
-      /* minimal gap directly under the title */
       margin-bottom: 8px; 
     }
 
-    /* The horizontal "track" for price targets */
     .price-range-track {
       position: relative;
       height: 8px;
       background-color: #ccc;
       border-radius: 4px;
-      /* Now we push it further down from the title. */
-      margin: 30px auto 10px auto; 
+      margin: 30px auto 10px auto;
       z-index: 1;
     }
 
-    /* Each "dot" on the track */
     .price-dot {
       position: absolute;
       top: 50%;
@@ -82,8 +88,6 @@
       transform: translate(-50%, -50%);
       z-index: 2;
     }
-
-    /* Label that pops above each dot */
     .price-label {
       position: absolute;
       transform: translate(-50%, -140%);
@@ -95,8 +99,6 @@
       white-space: nowrap;
       z-index: 3;
     }
-
-    /* Emphasize the current price dot */
     .price-dot.current {
       background-color: #d00;
     }
@@ -106,7 +108,6 @@
       font-weight: bold;
     }
 
-    /* So the chart "row" is hidden by default */
     .chartRow {
       display: none;
     }
@@ -114,7 +115,6 @@
       cursor: pointer;
     }
 
-    /* Arrow icon absolutely on the far left */
     .arrow-cell {
       text-align: left;
       position: relative;
@@ -127,46 +127,45 @@
       font-weight: bold;
     }
     .ticker-text {
-      margin-left: 25px;  /* space so it doesn’t collide with arrow */
+      margin-left: 25px;
     }
   </style>
 </head>
 <body>
 
-  <h1>JSE Sentiment Analysis</h1>
+  <div class="page-container">
+    <h1>JSE Sentiment Analysis</h1>
 
-  <!-- Inputs for ticker + price prediction -->
-  <input type="text" id="tickerInput" placeholder="Enter Stock Ticker (e.g. ECL)" />
-  <input type="number" id="priceInput" placeholder="1-Year Price Prediction ($)" />
-  <button id="submitPrediction">Submit Prediction</button>
+    <!-- Inputs for ticker + price prediction -->
+    <input type="text" id="tickerInput" placeholder="Enter Stock Ticker (e.g. ECL)" />
+    <input type="number" id="priceInput" placeholder="1-Year Price Prediction ($)" />
+    <button id="submitPrediction">Submit Prediction</button>
 
-  <p id="errorMessage"></p>
-  <p id="currentPriceDisplay"></p>
+    <p id="errorMessage"></p>
+    <p id="currentPriceDisplay"></p>
 
-  <table id="predictionsTable">
-    <thead>
-      <tr>
-        <th>Ticker</th>
-        <th>Current Price ($)</th>
-        <th>Avg Prediction Price ($)</th>
-        <th>Potential Upside/Downside (%)</th>
-        <th>Prediction Count</th>
-      </tr>
-    </thead>
-    <tbody id="predictionsBody"></tbody>
-  </table>
+    <table id="predictionsTable">
+      <thead>
+        <tr>
+          <th>Ticker</th>
+          <th>Current Price ($)</th>
+          <th>Avg Prediction Price ($)</th>
+          <th>Potential Upside/Downside (%)</th>
+          <th>Prediction Count</th>
+        </tr>
+      </thead>
+      <tbody id="predictionsBody"></tbody>
+    </table>
+  </div>
 
-  <!-- 
-    1) Firebase v9 "modular" SDK from CDN (requires HTTPS)
-    2) All the same code logic as before, just with spacing changes.
-  -->
+  <!-- All the same JS logic as before, just wrapped in .page-container for centering. -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
     import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-analytics.js";
     import { getDatabase, ref, onValue, push } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-database.js";
 
     const firebaseConfig = {
-      apiKey: "AIzaSyAp2QQErI9LtACfXuktlX-5847Rt8JWPfM",
+      apiKey: "AIzaSy...",
       authDomain: "jse-sentiment-analysis.firebaseapp.com",
       databaseURL: "https://jse-sentiment-analysis-default-rtdb.firebaseio.com",
       projectId: "jse-sentiment-analysis",
@@ -175,11 +174,13 @@
       appId: "1:225282121975:web:29bd14c63a4c11fc66b3f2",
       measurementId: "G-VLGXC41LME"
     };
-
     const app = initializeApp(firebaseConfig);
     getAnalytics(app);
     const db = getDatabase(app);
 
+    // ...the rest of your code is unchanged (fetching tickers.json, etc.)...
+    // (Paste in the same logic for submitPrediction, onValue, renderPredictionTable, etc.)
+    
     const tickersUrl = "https://raw.githubusercontent.com/matthewpres/JSE-Sentiment/main/tickers.json";
     let stockPrices = {};
 
@@ -192,208 +193,28 @@
       .catch(err => console.error("Error loading tickers:", err));
 
     function updateAutocomplete() {
-      const tickerInput = document.getElementById("tickerInput");
-      const datalist = document.createElement("datalist");
-      datalist.id = "tickerList";
-      Object.keys(stockPrices).forEach(ticker => {
-        let option = document.createElement("option");
-        option.value = ticker;
-        datalist.appendChild(option);
-      });
-      tickerInput.setAttribute("list", "tickerList");
-      document.body.appendChild(datalist);
+      // ...
     }
 
     document.getElementById("submitPrediction").addEventListener("click", () => {
-      const ticker = document.getElementById("tickerInput").value.toUpperCase();
-      const price = parseFloat(document.getElementById("priceInput").value);
-      const errorMessageEl = document.getElementById("errorMessage");
-
-      if (!ticker || isNaN(price) || !(ticker in stockPrices)) {
-        errorMessageEl.textContent = "Invalid ticker or missing price.";
-        errorMessageEl.style.color = "red";
-        return;
-      }
-      const tickerRef = ref(db, "predictions/" + ticker);
-      push(tickerRef, {
-        price: price,
-        timestamp: Date.now()
-      })
-      .then(() => {
-        errorMessageEl.textContent = "Prediction submitted successfully!";
-        errorMessageEl.style.color = "green";
-        document.getElementById("tickerInput").value = "";
-        document.getElementById("priceInput").value = "";
-      })
-      .catch(err => {
-        console.error("Error submitting prediction:", err);
-        errorMessageEl.textContent = "Error submitting prediction.";
-        errorMessageEl.style.color = "red";
-      });
+      // ...
     });
 
     const predictionsRef = ref(db, "predictions");
     onValue(predictionsRef, (snapshot) => {
-      const data = snapshot.val() || {};
-      let predictionsMap = {};
-      Object.keys(data).forEach(ticker => {
-        let entries = data[ticker];
-        let priceArray = Object.keys(entries).map(k => entries[k].price);
-        predictionsMap[ticker] = priceArray;
-      });
-      renderPredictionTable(predictionsMap);
+      // ...
     });
 
     function renderPredictionTable(predictionsMap) {
-      const predictionsBody = document.getElementById("predictionsBody");
-      predictionsBody.innerHTML = "";
-
-      Object.keys(predictionsMap).forEach(ticker => {
-        let priceArray = predictionsMap[ticker];
-        let avgPredictionPrice = priceArray.reduce((a, b) => a + b, 0) / priceArray.length;
-
-        let currentPrice = stockPrices[ticker] || "N/A";
-        let potentialMove = "N/A";
-        if (currentPrice !== "N/A") {
-          potentialMove = ((avgPredictionPrice - currentPrice) / currentPrice) * 100;
-        }
-
-        let row = document.createElement("tr");
-        row.classList.add("clickable-row");
-
-        let arrowCell = document.createElement("td");
-        arrowCell.classList.add("arrow-cell");
-        arrowCell.innerHTML = `
-          <span class="arrow-icon">&#x25BC;</span>
-          <span class="ticker-text">${ticker}</span>
-        `;
-
-        let currentPriceCell = document.createElement("td");
-        currentPriceCell.textContent = (currentPrice !== "N/A")
-          ? "$" + currentPrice.toFixed(2)
-          : "N/A";
-
-        let avgCell = document.createElement("td");
-        avgCell.textContent = `$${avgPredictionPrice.toFixed(2)}`;
-
-        let upsideCell = document.createElement("td");
-        upsideCell.textContent = (potentialMove !== "N/A")
-          ? potentialMove.toFixed(2) + "%"
-          : "N/A";
-
-        let countCell = document.createElement("td");
-        countCell.textContent = priceArray.length;
-
-        row.appendChild(arrowCell);
-        row.appendChild(currentPriceCell);
-        row.appendChild(avgCell);
-        row.appendChild(upsideCell);
-        row.appendChild(countCell);
-
-        let chartRow = document.createElement("tr");
-        chartRow.classList.add("chartRow");
-        let chartCell = document.createElement("td");
-        chartCell.colSpan = 5;
-        chartCell.innerHTML = `<div class="chart-container"></div>`;
-        chartRow.appendChild(chartCell);
-
-        row.addEventListener("click", () => {
-          const arrowIcon = arrowCell.querySelector(".arrow-icon");
-          if (chartRow.style.display === "table-row") {
-            chartRow.style.display = "none";
-            arrowIcon.textContent = "▼";
-          } else {
-            chartRow.style.display = "table-row";
-            arrowIcon.textContent = "▲";
-            let containerDiv = chartCell.querySelector(".chart-container");
-            containerDiv.innerHTML = "";
-            containerDiv.appendChild(
-              renderPriceTargetChart(ticker, priceArray, currentPrice)
-            );
-          }
-        });
-
-        predictionsBody.appendChild(row);
-        predictionsBody.appendChild(chartRow);
-      });
+      // ...
     }
 
     function renderPriceTargetChart(ticker, predictions, currentPrice) {
-      let minPrice = Math.min(...predictions);
-      let maxPrice = Math.max(...predictions);
-      let avgPrice = predictions.reduce((a, b) => a + b, 0) / predictions.length;
-
-      if (currentPrice !== "N/A") {
-        minPrice = Math.min(minPrice, currentPrice);
-        maxPrice = Math.max(maxPrice, currentPrice);
-      }
-      if (minPrice === maxPrice) {
-        maxPrice = minPrice + 0.01;
-      }
-
-      function getPct(price) {
-        let pct = ((price - minPrice) / (maxPrice - minPrice)) * 100;
-        return Math.max(0, Math.min(100, pct));
-      }
-
-      let container = document.createElement("div");
-      container.className = "chart-container";
-
-      let title = document.createElement("div");
-      title.className = "chart-title";
-      title.textContent = `Analyst Price Targets for ${ticker}`;
-      container.appendChild(title);
-
-      let track = document.createElement("div");
-      track.className = "price-range-track";
-      container.appendChild(track);
-
-      let lowVal = Math.min(...predictions);
-      let highVal = Math.max(...predictions);
-
-      let lowPct = getPct(lowVal);
-      let avgPct = getPct(avgPrice);
-      let highPct = getPct(highVal);
-
-      track.appendChild(createDot(lowPct, lowVal, "Low"));
-      track.appendChild(createDot(avgPct, avgPrice, "Average"));
-      track.appendChild(createDot(highPct, highVal, "High"));
-
-      if (currentPrice !== "N/A") {
-        let curPct = getPct(currentPrice);
-        let dotCur = createDot(curPct, currentPrice, "Current", true);
-        track.appendChild(dotCur);
-
-        let diffToLow = Math.abs(curPct - lowPct);
-        let diffToAvg = Math.abs(curPct - avgPct);
-        let diffToHigh = Math.abs(curPct - highPct);
-        if (diffToLow < 10 || diffToAvg < 10 || diffToHigh < 10) {
-          let curLabel = dotCur.querySelector(".price-label");
-          curLabel.style.transform = "translate(-50%, -220%)";
-        }
-      }
-      return container;
+      // ...
     }
 
     function createDot(percent, priceValue, labelText, isCurrent=false) {
-      let fragment = document.createElement("div");
-      fragment.style.position = "absolute";
-      fragment.style.left = 0;
-      fragment.style.right = 0;
-      fragment.style.top = 0;
-
-      let dot = document.createElement("div");
-      dot.className = "price-dot" + (isCurrent ? " current" : "");
-      dot.style.left = percent + "%";
-      fragment.appendChild(dot);
-
-      let label = document.createElement("div");
-      label.className = "price-label" + (isCurrent ? " current" : "");
-      label.textContent = `$${priceValue.toFixed(2)} (${labelText})`;
-      label.style.left = percent + "%";
-      fragment.appendChild(label);
-
-      return fragment;
+      // ...
     }
   </script>
 </body>
