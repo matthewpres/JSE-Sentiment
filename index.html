@@ -31,11 +31,10 @@
     table thead {
       background-color: #f4f4f4;
     }
-    table th,
-    table td {
+    table th, table td {
       padding: 8px 12px;
       text-align: center;
-      vertical-align: middle; /* helps align arrow nicely */
+      vertical-align: middle; /* helps keep arrow/ticker aligned */
       border-bottom: 1px solid #ccc;
     }
     table th {
@@ -50,12 +49,13 @@
       padding: 15px;
       background-color: #f9f9f9;
       border: 1px solid #ccc;
-      min-height: 140px; /* extra space so labels don’t overlap too badly */
+      min-height: 150px; /* extra space so labels/titles don’t overlap */
     }
     .chart-title {
       font-weight: bold;
-      margin-bottom: 15px;
       text-align: center;
+      /* Give extra space below the title so the average label doesn’t overlap */
+      margin-bottom: 30px;
     }
 
     /* The horizontal "track" for price targets (styled like Yahoo's) */
@@ -64,8 +64,9 @@
       height: 8px;
       background-color: #ccc;
       border-radius: 4px;
+      /* margin-top: 10px so it’s well below the chart-title */
       margin: 10px auto 15px auto;
-      z-index: 1; /* ensure it’s beneath the dots/labels */
+      z-index: 1;
     }
 
     /* Each "dot" on the track */
@@ -83,7 +84,6 @@
     /* Label that pops above each dot */
     .price-label {
       position: absolute;
-      /* a bit higher to reduce collisions */
       transform: translate(-50%, -140%);
       background-color: #fff;
       border: 1px solid #aaa;
@@ -114,10 +114,21 @@
       cursor: pointer;
     }
 
-    /* Arrow icon to the left of ticker */
+    /* Arrow icon absolutely positioned so it’s truly on the far left */
+    .arrow-cell {
+      text-align: left;
+      position: relative;
+    }
     .arrow-icon {
-      margin-right: 6px;
+      position: absolute;
+      left: 0;
+      top: 50%;
+      transform: translateY(-50%);
       font-weight: bold;
+    }
+    /* A span to hold the ticker text with left margin so it doesn’t collide with arrow */
+    .ticker-text {
+      margin-left: 25px;  /* space to the right of arrow */
     }
   </style>
 </head>
@@ -212,7 +223,7 @@
     const predictionsRef = ref(db, "predictions");
     onValue(predictionsRef, (snapshot) => {
       const data = snapshot.val() || {};
-      // Convert { TICKER: {key1:{price}, ...}, ... } to { TICKER: [prices...] }
+      // Convert { TICKER: {key1:{price}, ...}, ... } -> { TICKER: [price1, price2, ...], ... }
       let predictionsMap = {};
 
       Object.keys(data).forEach(ticker => {
@@ -278,16 +289,38 @@
         // Create the main row (clickable)
         let row = document.createElement("tr");
         row.classList.add("clickable-row");
-        row.innerHTML = `
-          <td style="text-align:left;">
-            <span class="arrow-icon">&#x25BC;</span>
-            ${ticker}
-          </td>
-          <td>${currentPrice !== "N/A" ? "$" + currentPrice.toFixed(2) : "N/A"}</td>
-          <td>$${avgPredictionPrice.toFixed(2)}</td>
-          <td>${potentialMove !== "N/A" ? potentialMove.toFixed(2) + "%" : "N/A"}</td>
-          <td>${priceArray.length}</td>
+
+        // The first cell has arrow + ticker
+        let arrowCell = document.createElement("td");
+        arrowCell.classList.add("arrow-cell");
+        arrowCell.innerHTML = `
+          <span class="arrow-icon">&#x25BC;</span>
+          <span class="ticker-text">${ticker}</span>
         `;
+
+        // The other cells
+        let currentPriceCell = document.createElement("td");
+        currentPriceCell.textContent = (currentPrice !== "N/A") 
+          ? "$" + currentPrice.toFixed(2)
+          : "N/A";
+
+        let avgCell = document.createElement("td");
+        avgCell.textContent = `$${avgPredictionPrice.toFixed(2)}`;
+
+        let upsideCell = document.createElement("td");
+        upsideCell.textContent = (potentialMove !== "N/A")
+          ? potentialMove.toFixed(2) + "%"
+          : "N/A";
+
+        let countCell = document.createElement("td");
+        countCell.textContent = priceArray.length;
+
+        // Append cells to the row
+        row.appendChild(arrowCell);
+        row.appendChild(currentPriceCell);
+        row.appendChild(avgCell);
+        row.appendChild(upsideCell);
+        row.appendChild(countCell);
 
         // Second row to hold the chart; hidden by default
         let chartRow = document.createElement("tr");
@@ -299,7 +332,7 @@
 
         // On main row click, toggle the chart row
         row.addEventListener("click", () => {
-          const arrowIcon = row.querySelector(".arrow-icon");
+          const arrowIcon = arrowCell.querySelector(".arrow-icon");
           if (chartRow.style.display === "table-row") {
             chartRow.style.display = "none";
             arrowIcon.textContent = "▼";
@@ -337,7 +370,7 @@
       let maxPrice = Math.max(...predictions);
       let avgPrice = predictions.reduce((a, b) => a + b, 0) / predictions.length;
 
-      // Avoid divide-by-zero if all predictions identical
+      // Avoid divide-by-zero if all predictions are identical
       if (minPrice === maxPrice) {
         maxPrice = minPrice + 0.01;
       }
@@ -348,16 +381,10 @@
         return Math.max(0, Math.min(100, pct));
       }
 
-      // Calculate percentages
-      let lowPct = getPct(minPrice);
-      let highPct = getPct(maxPrice);
-      let avgPct = getPct(avgPrice);
-      let currPct = currentPrice !== "N/A" ? getPct(currentPrice) : null;
-
-      // Container
       let container = document.createElement("div");
       container.className = "chart-container";
 
+      // Title
       let title = document.createElement("div");
       title.className = "chart-title";
       title.textContent = `Analyst Price Targets for ${ticker}`;
@@ -368,33 +395,29 @@
       track.className = "price-range-track";
       container.appendChild(track);
 
-      // Dots
-      let dotMin = createDot(lowPct, minPrice, "Low");
-      let dotAvg = createDot(avgPct, avgPrice, "Average");
-      let dotMax = createDot(highPct, maxPrice, "High");
+      // Create & place dots for Low, Avg, High
+      let lowPct = getPct(minPrice);
+      let avgPct = getPct(avgPrice);
+      let highPct = getPct(maxPrice);
 
-      track.appendChild(dotMin);
-      track.appendChild(dotAvg);
-      track.appendChild(dotMax);
+      track.appendChild(createDot(lowPct, minPrice, "Low"));
+      track.appendChild(createDot(avgPct, avgPrice, "Average"));
+      track.appendChild(createDot(highPct, maxPrice, "High"));
 
-      // If current is valid, create that dot
-      let dotCur = null;
-      if (currPct !== null) {
-        dotCur = createDot(currPct, currentPrice, "Current", true);
-        track.appendChild(dotCur);
-      }
+      // Current
+      if (currentPrice !== "N/A") {
+        let currPct = getPct(currentPrice);
+        let currentDot = createDot(currPct, currentPrice, "Current", true);
+        track.appendChild(currentDot);
 
-      // --- Simple overlap hack: If "Current" is too close to the others, shift label further up ---
-      if (dotCur) {
-        let diffToMin = Math.abs(currPct - lowPct);
+        // optional overlap hack:
+        let diffToLow = Math.abs(currPct - lowPct);
         let diffToAvg = Math.abs(currPct - avgPct);
-        let diffToMax = Math.abs(currPct - highPct);
-
-        // If "Current" is within 10% of Min or Avg or Max, push the Current label higher
-        if (diffToMin < 10 || diffToAvg < 10 || diffToMax < 10) {
-          let label = dotCur.querySelector(".price-label");
-          // Shift up a bit more
-          label.style.transform = "translate(-50%, -220%)";
+        let diffToHigh = Math.abs(currPct - highPct);
+        if (diffToLow < 10 || diffToAvg < 10 || diffToHigh < 10) {
+          let currentLabel = currentDot.querySelector(".price-label");
+          // Raise label if too close
+          currentLabel.style.transform = "translate(-50%, -220%)";
         }
       }
       return container;
@@ -415,7 +438,7 @@
       label.textContent = `$${priceValue.toFixed(2)} (${labelText})`;
       label.style.left = percent + "%";
 
-      // A container fragment so we can absolute‐position
+      // A container so we can absolutely position
       let fragment = document.createElement("div");
       fragment.style.position = "absolute";
       fragment.style.left = 0;
