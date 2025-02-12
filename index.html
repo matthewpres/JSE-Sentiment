@@ -2,19 +2,15 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>JSE Sentiment Analysis</title>
-  <!-- You can remove Chart.js if you're not using it for other charts -->
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <title>JSE Sentiment Analysis (Firebase v9 Modular)</title>
   <style>
     body {
       font-family: Arial, sans-serif;
       margin: 20px;
     }
-
     input {
       margin-right: 5px;
     }
-
     table {
       margin-top: 15px;
       border-collapse: collapse;
@@ -24,8 +20,7 @@
     table thead {
       background-color: #f4f4f4;
     }
-    table th,
-    table td {
+    table th, table td {
       padding: 8px 12px;
       text-align: center;
     }
@@ -35,12 +30,6 @@
     table td {
       border-bottom: 1px solid #ccc;
     }
-
-    .chart-container {
-      width: 600px;
-      margin: 40px auto;
-    }
-
     #errorMessage {
       margin-top: 10px;
       font-weight: bold;
@@ -48,8 +37,10 @@
     #currentPriceDisplay {
       margin-top: 5px;
     }
-
-    /* The "number line" for price targets */
+    .chart-container {
+      width: 600px;
+      margin: 40px auto;
+    }
     .number-line {
       position: relative;
       width: 100%;
@@ -58,8 +49,6 @@
       border-radius: 4px;
       margin-top: 20px;
     }
-
-    /* Marker labels */
     .marker {
       position: absolute;
       top: -25px;
@@ -81,6 +70,7 @@
 <body>
   <h1>JSE Sentiment Analysis</h1>
 
+  <!-- Inputs for user submission -->
   <input type="text" id="tickerInput" placeholder="Enter Stock Ticker (e.g. ECL)" />
   <input type="number" id="priceInput" placeholder="1-Year Price Prediction ($)" />
   <button id="submitPrediction">Submit Prediction</button>
@@ -106,26 +96,59 @@
     <div id="priceTargetChart"></div>
   </div>
 
-  <script>
-    // 1) Load the stock prices from GitHub
+  <!-- 
+    1) Using ES modules for Firebase v9.
+    2) Make sure you serve this page via HTTPS (GitHub Pages does).
+  -->
+  <script type="module">
+    /********************************************************************
+     *  STEP A: Import only what we need from Firebase
+     ********************************************************************/
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-analytics.js";
+    import { getDatabase, ref, onValue, push } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-database.js";
+
+    /********************************************************************
+     *  STEP B: Your Firebase config
+     *  (Replace with your real config from Firebase console)
+     ********************************************************************/
+    const firebaseConfig = {
+      apiKey: "AIzaSyAp2QQErI9LtACfXuktlX-5847Rt8JWPfM",
+      authDomain: "jse-sentiment-analysis.firebaseapp.com",
+      databaseURL: "https://jse-sentiment-analysis-default-rtdb.firebaseio.com",
+      projectId: "jse-sentiment-analysis",
+      storageBucket: "jse-sentiment-analysis.appspot.com",
+      messagingSenderId: "225282121975",
+      appId: "1:225282121975:web:29bd14c63a4c11fc66b3f2",
+      measurementId: "G-VLGXC41LME"
+    };
+
+    // Initialize Firebase
+    const app = initializeApp(firebaseConfig);
+    // (Optional) Initialize Analytics
+    getAnalytics(app);
+
+    // Get a reference to the Realtime Database
+    const db = getDatabase(app);
+
+    /********************************************************************
+     *  STEP C: Load tickers from your GitHub JSON
+     ********************************************************************/
     const tickersUrl = "https://raw.githubusercontent.com/matthewpres/JSE-Sentiment/main/tickers.json";
     let stockPrices = {};
 
     fetch(tickersUrl)
-      .then(response => response.json())
+      .then(res => res.json())
       .then(data => {
         stockPrices = data;
-        console.log("Stock prices loaded:", stockPrices);
+        console.log("Loaded stock prices:", data);
         updateAutocomplete();
-        // Once we have prices, also load existing predictions from server
-        fetchPredictionsFromServer();
       })
-      .catch(error => console.error("Error loading tickers:", error));
+      .catch(err => console.error("Error loading tickers:", err));
 
-    // 2) Autocomplete for the ticker input
     function updateAutocomplete() {
-      let tickerInput = document.getElementById("tickerInput");
-      let datalist = document.createElement("datalist");
+      const tickerInput = document.getElementById("tickerInput");
+      const datalist = document.createElement("datalist");
       datalist.id = "tickerList";
 
       Object.keys(stockPrices).forEach(ticker => {
@@ -138,73 +161,69 @@
       document.body.appendChild(datalist);
     }
 
-    // 3) On "Submit Prediction," POST to our server
-    document.getElementById("submitPrediction").addEventListener("click", function () {
+    /********************************************************************
+     *  STEP D: Watch the entire /predictions node in Realtime DB
+     *  (That way, multiple users all see the same, live-updating data)
+     ********************************************************************/
+    const predictionsRef = ref(db, "predictions");
+
+    onValue(predictionsRef, (snapshot) => {
+      const data = snapshot.val() || {};
+      // data shape: { TICKER: { key1: {price, timestamp}, key2: {...} }, ... }
+      // Convert that to: { TICKER: [price1, price2, ...], ... }
+      let predictionsMap = {};
+
+      Object.keys(data).forEach(ticker => {
+        let entries = data[ticker]; // object of { key: {price, timestamp}, key2: {...} }
+        let priceArray = Object.keys(entries).map(k => entries[k].price);
+        predictionsMap[ticker] = priceArray;
+      });
+
+      renderPredictionTable(predictionsMap);
+    });
+
+    /********************************************************************
+     *  STEP E: Submit a new prediction → push to /predictions/ticker
+     ********************************************************************/
+    document.getElementById("submitPrediction").addEventListener("click", () => {
       const ticker = document.getElementById("tickerInput").value.toUpperCase();
       const predictionPrice = parseFloat(document.getElementById("priceInput").value);
       const errorMessageEl = document.getElementById("errorMessage");
 
-      // Basic validation
       if (!ticker || isNaN(predictionPrice) || !(ticker in stockPrices)) {
         errorMessageEl.textContent = "Invalid ticker or missing price.";
         errorMessageEl.style.color = "red";
         return;
       }
 
-      // POST the new prediction
-      fetch("/api/predictions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ticker, price: predictionPrice }),
-      })
-        .then(res => {
-          if (!res.ok) {
-            throw new Error("Server error while posting prediction");
-          }
-          return res.json();
-        })
-        .then(data => {
-          // data = updated predictions from the server
-          errorMessageEl.textContent = "Prediction submitted successfully!";
-          errorMessageEl.style.color = "green";
-
-          // Clear input
-          document.getElementById("tickerInput").value = "";
-          document.getElementById("priceInput").value = "";
-
-          // Re-render the table with fresh data
-          renderPredictionTable(data);
-        })
-        .catch(err => {
-          errorMessageEl.textContent = err.message;
-          errorMessageEl.style.color = "red";
-        });
+      // "push" a new child under /predictions/<ticker>
+      const tickerRef = ref(db, "predictions/" + ticker);
+      push(tickerRef, {
+        price: predictionPrice,
+        timestamp: Date.now()
+      }).then(() => {
+        errorMessageEl.textContent = "Prediction submitted successfully!";
+        errorMessageEl.style.color = "green";
+        // Clear inputs
+        document.getElementById("tickerInput").value = "";
+        document.getElementById("priceInput").value = "";
+      }).catch(err => {
+        console.error("Error submitting prediction:", err);
+        errorMessageEl.textContent = "Error submitting prediction.";
+        errorMessageEl.style.color = "red";
+      });
     });
 
-    // 4) Get the existing predictions from the server
-    function fetchPredictionsFromServer() {
-      fetch("/api/predictions")
-        .then(res => res.json())
-        .then(data => {
-          console.log("Loaded predictions:", data);
-          renderPredictionTable(data);
-        })
-        .catch(err => {
-          console.error("Error fetching predictions:", err);
-        });
-    }
-
-    // 5) Render the table
-    function renderPredictionTable(predictionsData) {
-      let predictionsBody = document.getElementById("predictionsBody");
+    /********************************************************************
+     *  STEP F: Render the table from a { TICKER: [prices...] } object
+     ********************************************************************/
+    function renderPredictionTable(predictionsMap) {
+      const predictionsBody = document.getElementById("predictionsBody");
       predictionsBody.innerHTML = "";
 
-      // predictionsData shape: { "TICKER": [prices...], "TICKER2": [...], ... }
-      Object.keys(predictionsData).forEach(ticker => {
-        let predictionPrices = predictionsData[ticker];
-        // Calculate average
-        let avgPredictionPrice =
-          predictionPrices.reduce((a, b) => a + b, 0) / predictionPrices.length;
+      Object.keys(predictionsMap).forEach(ticker => {
+        let predictionPrices = predictionsMap[ticker];
+        let avgPredictionPrice = predictionPrices.reduce((a, b) => a + b, 0) / predictionPrices.length;
 
         let currentPrice = stockPrices[ticker] || "N/A";
         let potentialMove = "N/A";
@@ -220,11 +239,10 @@
           <td>${potentialMove !== "N/A" ? potentialMove.toFixed(2) + "%" : "N/A"}</td>
           <td>${predictionPrices.length}</td>
         `;
+
         // Clicking a row → show the price target chart
         row.addEventListener("click", () => {
-          if (currentPrice !== "N/A") {
-            showCurrentPrice(ticker);
-          }
+          showCurrentPrice(ticker);
           renderPriceTargetChart(ticker, predictionPrices, currentPrice);
         });
 
@@ -240,13 +258,15 @@
           : "Market price not available";
     }
 
-    // 6) The price target number line
+    /********************************************************************
+     *  STEP G: Render the min/avg/max/current number-line chart
+     ********************************************************************/
     function renderPriceTargetChart(ticker, predictions, currentPrice) {
       let minPrice = Math.min(...predictions);
       let maxPrice = Math.max(...predictions);
       let avgPrice = predictions.reduce((a, b) => a + b, 0) / predictions.length;
 
-      // Avoid dividing by zero if min == max
+      // Handle case where all predictions are identical
       if (minPrice === maxPrice) {
         maxPrice = minPrice + 0.01;
       }
@@ -257,7 +277,7 @@
       }
 
       const minPct = getPercentage(minPrice);
-      const maxPct = getPercentage(maxPrice); // ~100%
+      const maxPct = getPercentage(maxPrice); // ~100
       const avgPct = getPercentage(avgPrice);
       let currentPct = avgPct;
       if (currentPrice !== "N/A") {
