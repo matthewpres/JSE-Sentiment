@@ -31,9 +31,11 @@
     table thead {
       background-color: #f4f4f4;
     }
-    table th, table td {
+    table th,
+    table td {
       padding: 8px 12px;
       text-align: center;
+      vertical-align: middle; /* helps align arrow nicely */
       border-bottom: 1px solid #ccc;
     }
     table th {
@@ -43,15 +45,18 @@
     /* A container for the chart */
     .chart-container {
       width: 100%;
+      position: relative;
+      margin-top: 10px;
       padding: 15px;
       background-color: #f9f9f9;
       border: 1px solid #ccc;
-      margin-top: 10px;
-      position: relative;
+      /* Increase minimum height so chart labels have space */
+      min-height: 140px;
     }
     .chart-title {
       font-weight: bold;
-      margin-bottom: 10px;
+      margin-bottom: 15px;
+      text-align: center;
     }
 
     /* The horizontal "track" for price targets (styled like Yahoo's) */
@@ -60,8 +65,11 @@
       height: 8px;
       background-color: #ccc;
       border-radius: 4px;
-      margin: 20px 0 15px 0;
+      margin: 10px auto 15px auto;
+      /* Let’s ensure it’s “on bottom” so labels can be on top. */
+      z-index: 1;
     }
+
     /* Each "dot" on the track */
     .price-dot {
       position: absolute;
@@ -71,18 +79,23 @@
       background-color: #666;
       border-radius: 50%;
       transform: translate(-50%, -50%);
+      z-index: 2; /* ensure dot is above the track */
     }
-    /* Label that pops above/below each dot */
+
+    /* Label that pops above each dot */
     .price-label {
       position: absolute;
+      /* A bit higher than before to reduce overlap */
+      transform: translate(-50%, -140%);
       background-color: #fff;
       border: 1px solid #aaa;
       border-radius: 3px;
       padding: 3px 5px;
       font-size: 13px;
-      transform: translate(-50%, -110%);
       white-space: nowrap;
+      z-index: 3; /* ensure label is above the dot */
     }
+
     /* Emphasize the current price dot */
     .price-dot.current {
       background-color: #d00;
@@ -92,17 +105,20 @@
       border-color: #d00;
       font-weight: bold;
     }
+
     /* So the chart "row" is hidden by default */
     .chartRow {
       display: none;
     }
+
     /* We want a pointer cursor on the main row to show it’s clickable */
     .clickable-row {
       cursor: pointer;
     }
+
     /* Put a little margin on the arrow itself */
     .arrow-icon {
-      margin-left: 6px;
+      margin-right: 6px;
       font-weight: bold;
     }
   </style>
@@ -198,8 +214,7 @@
     const predictionsRef = ref(db, "predictions");
     onValue(predictionsRef, (snapshot) => {
       const data = snapshot.val() || {};
-      // Convert from { TICKER: {key1:{price}, key2:{price}}, ... } 
-      // to { TICKER: [price1, price2, ...], ... }
+      // Convert { TICKER: {key1:{price}, ...}, ... } to { TICKER: [prices...] }
       let predictionsMap = {};
 
       Object.keys(data).forEach(ticker => {
@@ -262,14 +277,13 @@
           potentialMove = ((avgPredictionPrice - currentPrice) / currentPrice) * 100;
         }
 
-        // Create the main row
+        // Create the main row (clickable)
         let row = document.createElement("tr");
-        // We'll store the arrow char in the 1st cell, along with the ticker
         row.classList.add("clickable-row");
         row.innerHTML = `
-          <td>
+          <td style="text-align:left;">
+            <span class="arrow-icon">&#x25BC;</span>
             ${ticker}
-            <span class="arrow-icon">&#x25BC;</span>  <!-- Down arrow by default -->
           </td>
           <td>${currentPrice !== "N/A" ? "$" + currentPrice.toFixed(2) : "N/A"}</td>
           <td>$${avgPredictionPrice.toFixed(2)}</td>
@@ -277,11 +291,11 @@
           <td>${priceArray.length}</td>
         `;
 
-        // Second row to hold the chart
+        // Second row to hold the chart; hidden by default
         let chartRow = document.createElement("tr");
         chartRow.classList.add("chartRow");
         let chartCell = document.createElement("td");
-        chartCell.colSpan = 5; // span all table columns
+        chartCell.colSpan = 5; // span all columns
         chartCell.innerHTML = `<div class="chart-container"></div>`;
         chartRow.appendChild(chartCell);
 
@@ -290,12 +304,12 @@
           const arrowIcon = row.querySelector(".arrow-icon");
           if (chartRow.style.display === "table-row") {
             chartRow.style.display = "none";
-            arrowIcon.textContent = "▼"; // down arrow
+            arrowIcon.textContent = "▼";
           } else {
             chartRow.style.display = "table-row";
-            arrowIcon.textContent = "▲"; // up arrow
+            arrowIcon.textContent = "▲";
 
-            // Render the chart inside the chartContainer
+            // Render the chart in the chart container
             let containerDiv = chartCell.querySelector(".chart-container");
             containerDiv.innerHTML = ""; // clear old contents
             containerDiv.appendChild(
@@ -304,7 +318,6 @@
           }
         });
 
-        // Append the two rows
         predictionsBody.appendChild(row);
         predictionsBody.appendChild(chartRow);
       });
@@ -334,7 +347,7 @@
       // Map a numeric price to a 0-100% offset
       function getPct(price) {
         let pct = ((price - minPrice) / (maxPrice - minPrice)) * 100;
-        return Math.min(100, Math.max(0, pct));
+        return Math.max(0, Math.min(100, pct));
       }
 
       let container = document.createElement("div");
@@ -352,7 +365,6 @@
       container.appendChild(track);
 
       // Create dots for min, avg, max, current
-      // We'll label them similarly to Yahoo
       // 1) Low
       let lowPct = getPct(minPrice);
       track.appendChild(createDot(lowPct, minPrice, "Low"));
@@ -387,16 +399,15 @@
       let label = document.createElement("div");
       label.className = "price-label" + (isCurrent ? " current" : "");
       label.textContent = `$${priceValue.toFixed(2)} (${labelText})`;
-      // Position label above or slightly offset
       label.style.left = percent + "%";
 
-      // We'll put them inside a fragment or container
+      // We'll put them inside a fragment so we can absolute‐position them easily
       let fragment = document.createElement("div");
       fragment.style.position = "absolute";
       fragment.style.left = 0;
       fragment.style.right = 0;
       fragment.style.top = 0;
-      // Add the dot and label
+
       fragment.appendChild(dot);
       fragment.appendChild(label);
       return fragment;
