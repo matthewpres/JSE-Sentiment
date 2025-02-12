@@ -41,31 +41,30 @@
       border-bottom: 2px solid #ccc;
     }
 
-    /* A container for the chart */
+    /* Container for the chart with smaller size and round corners */
     .chart-container {
       width: 100%;
       position: relative;
-      margin-top: 10px;
-      padding: 15px;
-      background-color: #f9f9f9;
+      margin-top: 8px;
+      padding: 10px;
+      background-color: #fcfcfc; /* lighter background */
       border: 1px solid #ccc;
-      min-height: 150px; /* extra space so labels/titles don’t overlap */
+      border-radius: 8px;       /* round corners */
+      min-height: 100px;        /* smaller minimum height */
     }
     .chart-title {
       font-weight: bold;
       text-align: center;
-      /* Give extra space below the title so the average label doesn’t overlap */
-      margin-bottom: 30px;
+      margin-bottom: 15px; /* less space, but still a gap below */
     }
 
-    /* The horizontal "track" for price targets (styled like Yahoo's) */
+    /* The horizontal "track" for price targets */
     .price-range-track {
       position: relative;
       height: 8px;
       background-color: #ccc;
       border-radius: 4px;
-      /* margin-top: 10px so it’s well below the chart-title */
-      margin: 10px auto 15px auto;
+      margin: 0 auto 15px auto; /* less vertical space overall */
       z-index: 1;
     }
 
@@ -88,8 +87,8 @@
       background-color: #fff;
       border: 1px solid #aaa;
       border-radius: 3px;
-      padding: 3px 5px;
-      font-size: 13px;
+      padding: 2px 4px;
+      font-size: 12px;
       white-space: nowrap;
       z-index: 3;
     }
@@ -108,13 +107,11 @@
     .chartRow {
       display: none;
     }
-
-    /* We want a pointer cursor on the main row to show it’s clickable */
     .clickable-row {
       cursor: pointer;
     }
 
-    /* Arrow icon absolutely positioned so it’s truly on the far left */
+    /* Arrow icon absolutely on the far left */
     .arrow-cell {
       text-align: left;
       position: relative;
@@ -126,9 +123,8 @@
       transform: translateY(-50%);
       font-weight: bold;
     }
-    /* A span to hold the ticker text with left margin so it doesn’t collide with arrow */
     .ticker-text {
-      margin-left: 25px;  /* space to the right of arrow */
+      margin-left: 25px;  /* space so it doesn’t collide with arrow */
     }
   </style>
 </head>
@@ -157,10 +153,7 @@
     <tbody id="predictionsBody"></tbody>
   </table>
 
-  <!-- 
-    1) Firebase v9 "modular" SDK from CDN.
-    2) Must be served via HTTPS (GitHub Pages does).
-  -->
+  <!-- Firebase v9 "modular" SDK from CDN (requires HTTPS) -->
   <script type="module">
     /***************************************************
      * STEP A: Import Firebase v9 modules
@@ -182,6 +175,7 @@
       appId: "1:225282121975:web:29bd14c63a4c11fc66b3f2",
       measurementId: "G-VLGXC41LME"
     };
+
     // Initialize Firebase
     const app = initializeApp(firebaseConfig);
     getAnalytics(app);
@@ -223,7 +217,7 @@
     const predictionsRef = ref(db, "predictions");
     onValue(predictionsRef, (snapshot) => {
       const data = snapshot.val() || {};
-      // Convert { TICKER: {key1:{price}, ...}, ... } -> { TICKER: [price1, price2, ...], ... }
+      // Convert { TICKER: {key1:{price}, ...} } -> { TICKER: [price1, price2, ...] }
       let predictionsMap = {};
 
       Object.keys(data).forEach(ticker => {
@@ -232,12 +226,11 @@
         predictionsMap[ticker] = priceArray;
       });
 
-      // Re-render the table with the updated predictions
       renderPredictionTable(predictionsMap);
     });
 
     /***************************************************
-     * STEP E: Submitting a new prediction
+     * STEP E: Submit a new prediction
      ***************************************************/
     document.getElementById("submitPrediction").addEventListener("click", () => {
       const ticker = document.getElementById("tickerInput").value.toUpperCase();
@@ -250,7 +243,7 @@
         return;
       }
 
-      // Push to /predictions/<TICKER>
+      // Push to /predictions/<ticker>
       const tickerRef = ref(db, "predictions/" + ticker);
       push(tickerRef, {
         price: predictionPrice,
@@ -286,11 +279,10 @@
           potentialMove = ((avgPredictionPrice - currentPrice) / currentPrice) * 100;
         }
 
-        // Create the main row (clickable)
+        // Main row (clickable)
         let row = document.createElement("tr");
         row.classList.add("clickable-row");
 
-        // The first cell has arrow + ticker
         let arrowCell = document.createElement("td");
         arrowCell.classList.add("arrow-cell");
         arrowCell.innerHTML = `
@@ -298,9 +290,8 @@
           <span class="ticker-text">${ticker}</span>
         `;
 
-        // The other cells
         let currentPriceCell = document.createElement("td");
-        currentPriceCell.textContent = (currentPrice !== "N/A") 
+        currentPriceCell.textContent = (currentPrice !== "N/A")
           ? "$" + currentPrice.toFixed(2)
           : "N/A";
 
@@ -315,22 +306,21 @@
         let countCell = document.createElement("td");
         countCell.textContent = priceArray.length;
 
-        // Append cells to the row
         row.appendChild(arrowCell);
         row.appendChild(currentPriceCell);
         row.appendChild(avgCell);
         row.appendChild(upsideCell);
         row.appendChild(countCell);
 
-        // Second row to hold the chart; hidden by default
+        // Chart row (hidden by default)
         let chartRow = document.createElement("tr");
         chartRow.classList.add("chartRow");
         let chartCell = document.createElement("td");
-        chartCell.colSpan = 5; // span all columns
+        chartCell.colSpan = 5;
         chartCell.innerHTML = `<div class="chart-container"></div>`;
         chartRow.appendChild(chartCell);
 
-        // On main row click, toggle the chart row
+        // Toggle on row click
         row.addEventListener("click", () => {
           const arrowIcon = arrowCell.querySelector(".arrow-icon");
           if (chartRow.style.display === "table-row") {
@@ -340,9 +330,8 @@
             chartRow.style.display = "table-row";
             arrowIcon.textContent = "▲";
 
-            // Render the chart in the chart container
             let containerDiv = chartCell.querySelector(".chart-container");
-            containerDiv.innerHTML = ""; // clear old contents
+            containerDiv.innerHTML = "";
             containerDiv.appendChild(
               renderPriceTargetChart(ticker, priceArray, currentPrice)
             );
@@ -354,14 +343,6 @@
       });
     }
 
-    function showCurrentPrice(ticker) {
-      const price = stockPrices[ticker];
-      document.getElementById("currentPriceDisplay").textContent =
-        price !== undefined
-          ? `Current Market Price: $${price.toFixed(2)}`
-          : "Market price not available";
-    }
-
     /***************************************************
      * STEP G: Build a "Yahoo-like" price target chart
      ***************************************************/
@@ -370,12 +351,18 @@
       let maxPrice = Math.max(...predictions);
       let avgPrice = predictions.reduce((a, b) => a + b, 0) / predictions.length;
 
-      // Avoid divide-by-zero if all predictions are identical
+      // 1) Incorporate "Current" into the scale if it's valid
+      //    so the chart always includes the Current marker
+      if (currentPrice !== "N/A") {
+        minPrice = Math.min(minPrice, currentPrice);
+        maxPrice = Math.max(maxPrice, currentPrice);
+      }
+      // Avoid divide by zero
       if (minPrice === maxPrice) {
         maxPrice = minPrice + 0.01;
       }
 
-      // Convert a numeric price to a 0-100% offset
+      // Helper: convert numeric price -> 0..100%
       function getPct(price) {
         let pct = ((price - minPrice) / (maxPrice - minPrice)) * 100;
         return Math.max(0, Math.min(100, pct));
@@ -384,7 +371,6 @@
       let container = document.createElement("div");
       container.className = "chart-container";
 
-      // Title
       let title = document.createElement("div");
       title.className = "chart-title";
       title.textContent = `Analyst Price Targets for ${ticker}`;
@@ -395,29 +381,28 @@
       track.className = "price-range-track";
       container.appendChild(track);
 
-      // Create & place dots for Low, Avg, High
-      let lowPct = getPct(minPrice);
+      // Markers
+      let lowPct = getPct(Math.min(...predictions));
       let avgPct = getPct(avgPrice);
-      let highPct = getPct(maxPrice);
+      let highPct = getPct(Math.max(...predictions));
 
-      track.appendChild(createDot(lowPct, minPrice, "Low"));
+      track.appendChild(createDot(lowPct, Math.min(...predictions), "Low"));
       track.appendChild(createDot(avgPct, avgPrice, "Average"));
-      track.appendChild(createDot(highPct, maxPrice, "High"));
+      track.appendChild(createDot(highPct, Math.max(...predictions), "High"));
 
       // Current
       if (currentPrice !== "N/A") {
-        let currPct = getPct(currentPrice);
-        let currentDot = createDot(currPct, currentPrice, "Current", true);
-        track.appendChild(currentDot);
+        let curPct = getPct(currentPrice);
+        let dotCur = createDot(curPct, currentPrice, "Current", true);
+        track.appendChild(dotCur);
 
-        // optional overlap hack:
-        let diffToLow = Math.abs(currPct - lowPct);
-        let diffToAvg = Math.abs(currPct - avgPct);
-        let diffToHigh = Math.abs(currPct - highPct);
+        // Slight overlap hack
+        let diffToLow = Math.abs(curPct - lowPct);
+        let diffToAvg = Math.abs(curPct - avgPct);
+        let diffToHigh = Math.abs(curPct - highPct);
         if (diffToLow < 10 || diffToAvg < 10 || diffToHigh < 10) {
-          let currentLabel = currentDot.querySelector(".price-label");
-          // Raise label if too close
-          currentLabel.style.transform = "translate(-50%, -220%)";
+          let curLabel = dotCur.querySelector(".price-label");
+          curLabel.style.transform = "translate(-50%, -220%)";
         }
       }
       return container;
@@ -427,26 +412,23 @@
      * Helper: create a labeled dot
      ***************************************************/
     function createDot(percent, priceValue, labelText, isCurrent=false) {
-      // Dot
-      let dot = document.createElement("div");
-      dot.className = "price-dot" + (isCurrent ? " current" : "");
-      dot.style.left = percent + "%";
-
-      // Label
-      let label = document.createElement("div");
-      label.className = "price-label" + (isCurrent ? " current" : "");
-      label.textContent = `$${priceValue.toFixed(2)} (${labelText})`;
-      label.style.left = percent + "%";
-
-      // A container so we can absolutely position
       let fragment = document.createElement("div");
       fragment.style.position = "absolute";
       fragment.style.left = 0;
       fragment.style.right = 0;
       fragment.style.top = 0;
 
+      let dot = document.createElement("div");
+      dot.className = "price-dot" + (isCurrent ? " current" : "");
+      dot.style.left = percent + "%";
       fragment.appendChild(dot);
+
+      let label = document.createElement("div");
+      label.className = "price-label" + (isCurrent ? " current" : "");
+      label.textContent = `$${priceValue.toFixed(2)} (${labelText})`;
+      label.style.left = percent + "%";
       fragment.appendChild(label);
+
       return fragment;
     }
   </script>
