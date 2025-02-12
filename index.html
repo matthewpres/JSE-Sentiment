@@ -45,17 +45,19 @@
     .chart-container {
       width: 100%;
       position: relative;
-      margin-top: 8px;
-      padding: 10px;
-      background-color: #fcfcfc; /* lighter background */
+      /* Increase bottom padding so we can push the track further down. */
+      padding: 10px 10px 30px 10px;
+      background-color: #fcfcfc; 
       border: 1px solid #ccc;
-      border-radius: 8px;       /* round corners */
-      min-height: 100px;        /* smaller minimum height */
+      border-radius: 8px; 
+      min-height: 120px; /* a bit more space so labels don't collide */
+      margin-top: 8px;
     }
     .chart-title {
       font-weight: bold;
       text-align: center;
-      margin-bottom: 15px; /* less space, but still a gap below */
+      /* minimal gap directly under the title */
+      margin-bottom: 8px; 
     }
 
     /* The horizontal "track" for price targets */
@@ -64,7 +66,8 @@
       height: 8px;
       background-color: #ccc;
       border-radius: 4px;
-      margin: 0 auto 15px auto; /* less vertical space overall */
+      /* Now we push it further down from the title. */
+      margin: 30px auto 10px auto; 
       z-index: 1;
     }
 
@@ -153,18 +156,15 @@
     <tbody id="predictionsBody"></tbody>
   </table>
 
-  <!-- Firebase v9 "modular" SDK from CDN (requires HTTPS) -->
+  <!-- 
+    1) Firebase v9 "modular" SDK from CDN (requires HTTPS)
+    2) All the same code logic as before, just with spacing changes.
+  -->
   <script type="module">
-    /***************************************************
-     * STEP A: Import Firebase v9 modules
-     ***************************************************/
     import { initializeApp } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-app.js";
     import { getAnalytics } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-analytics.js";
     import { getDatabase, ref, onValue, push } from "https://www.gstatic.com/firebasejs/9.15.0/firebase-database.js";
 
-    /***************************************************
-     * STEP B: Your Firebase config
-     ***************************************************/
     const firebaseConfig = {
       apiKey: "AIzaSyAp2QQErI9LtACfXuktlX-5847Rt8JWPfM",
       authDomain: "jse-sentiment-analysis.firebaseapp.com",
@@ -176,14 +176,10 @@
       measurementId: "G-VLGXC41LME"
     };
 
-    // Initialize Firebase
     const app = initializeApp(firebaseConfig);
     getAnalytics(app);
     const db = getDatabase(app);
 
-    /***************************************************
-     * STEP C: Load tickers from GitHub
-     ***************************************************/
     const tickersUrl = "https://raw.githubusercontent.com/matthewpres/JSE-Sentiment/main/tickers.json";
     let stockPrices = {};
 
@@ -191,7 +187,6 @@
       .then(res => res.json())
       .then(data => {
         stockPrices = data;
-        console.log("Loaded stock prices:", data);
         updateAutocomplete();
       })
       .catch(err => console.error("Error loading tickers:", err));
@@ -200,53 +195,28 @@
       const tickerInput = document.getElementById("tickerInput");
       const datalist = document.createElement("datalist");
       datalist.id = "tickerList";
-
       Object.keys(stockPrices).forEach(ticker => {
         let option = document.createElement("option");
         option.value = ticker;
         datalist.appendChild(option);
       });
-
       tickerInput.setAttribute("list", "tickerList");
       document.body.appendChild(datalist);
     }
 
-    /***************************************************
-     * STEP D: Listen to Realtime Database: /predictions
-     ***************************************************/
-    const predictionsRef = ref(db, "predictions");
-    onValue(predictionsRef, (snapshot) => {
-      const data = snapshot.val() || {};
-      // Convert { TICKER: {key1:{price}, ...} } -> { TICKER: [price1, price2, ...] }
-      let predictionsMap = {};
-
-      Object.keys(data).forEach(ticker => {
-        let entries = data[ticker];
-        let priceArray = Object.keys(entries).map(k => entries[k].price);
-        predictionsMap[ticker] = priceArray;
-      });
-
-      renderPredictionTable(predictionsMap);
-    });
-
-    /***************************************************
-     * STEP E: Submit a new prediction
-     ***************************************************/
     document.getElementById("submitPrediction").addEventListener("click", () => {
       const ticker = document.getElementById("tickerInput").value.toUpperCase();
-      const predictionPrice = parseFloat(document.getElementById("priceInput").value);
+      const price = parseFloat(document.getElementById("priceInput").value);
       const errorMessageEl = document.getElementById("errorMessage");
 
-      if (!ticker || isNaN(predictionPrice) || !(ticker in stockPrices)) {
+      if (!ticker || isNaN(price) || !(ticker in stockPrices)) {
         errorMessageEl.textContent = "Invalid ticker or missing price.";
         errorMessageEl.style.color = "red";
         return;
       }
-
-      // Push to /predictions/<ticker>
       const tickerRef = ref(db, "predictions/" + ticker);
       push(tickerRef, {
-        price: predictionPrice,
+        price: price,
         timestamp: Date.now()
       })
       .then(() => {
@@ -262,9 +232,18 @@
       });
     });
 
-    /***************************************************
-     * STEP F: Render the table
-     ***************************************************/
+    const predictionsRef = ref(db, "predictions");
+    onValue(predictionsRef, (snapshot) => {
+      const data = snapshot.val() || {};
+      let predictionsMap = {};
+      Object.keys(data).forEach(ticker => {
+        let entries = data[ticker];
+        let priceArray = Object.keys(entries).map(k => entries[k].price);
+        predictionsMap[ticker] = priceArray;
+      });
+      renderPredictionTable(predictionsMap);
+    });
+
     function renderPredictionTable(predictionsMap) {
       const predictionsBody = document.getElementById("predictionsBody");
       predictionsBody.innerHTML = "";
@@ -279,7 +258,6 @@
           potentialMove = ((avgPredictionPrice - currentPrice) / currentPrice) * 100;
         }
 
-        // Main row (clickable)
         let row = document.createElement("tr");
         row.classList.add("clickable-row");
 
@@ -312,7 +290,6 @@
         row.appendChild(upsideCell);
         row.appendChild(countCell);
 
-        // Chart row (hidden by default)
         let chartRow = document.createElement("tr");
         chartRow.classList.add("chartRow");
         let chartCell = document.createElement("td");
@@ -320,7 +297,6 @@
         chartCell.innerHTML = `<div class="chart-container"></div>`;
         chartRow.appendChild(chartCell);
 
-        // Toggle on row click
         row.addEventListener("click", () => {
           const arrowIcon = arrowCell.querySelector(".arrow-icon");
           if (chartRow.style.display === "table-row") {
@@ -329,7 +305,6 @@
           } else {
             chartRow.style.display = "table-row";
             arrowIcon.textContent = "▲";
-
             let containerDiv = chartCell.querySelector(".chart-container");
             containerDiv.innerHTML = "";
             containerDiv.appendChild(
@@ -343,26 +318,19 @@
       });
     }
 
-    /***************************************************
-     * STEP G: Build a "Yahoo-like" price target chart
-     ***************************************************/
     function renderPriceTargetChart(ticker, predictions, currentPrice) {
       let minPrice = Math.min(...predictions);
       let maxPrice = Math.max(...predictions);
       let avgPrice = predictions.reduce((a, b) => a + b, 0) / predictions.length;
 
-      // 1) Incorporate "Current" into the scale if it's valid
-      //    so the chart always includes the Current marker
       if (currentPrice !== "N/A") {
         minPrice = Math.min(minPrice, currentPrice);
         maxPrice = Math.max(maxPrice, currentPrice);
       }
-      // Avoid divide by zero
       if (minPrice === maxPrice) {
         maxPrice = minPrice + 0.01;
       }
 
-      // Helper: convert numeric price -> 0..100%
       function getPct(price) {
         let pct = ((price - minPrice) / (maxPrice - minPrice)) * 100;
         return Math.max(0, Math.min(100, pct));
@@ -376,27 +344,26 @@
       title.textContent = `Analyst Price Targets for ${ticker}`;
       container.appendChild(title);
 
-      // The track
       let track = document.createElement("div");
       track.className = "price-range-track";
       container.appendChild(track);
 
-      // Markers
-      let lowPct = getPct(Math.min(...predictions));
+      let lowVal = Math.min(...predictions);
+      let highVal = Math.max(...predictions);
+
+      let lowPct = getPct(lowVal);
       let avgPct = getPct(avgPrice);
-      let highPct = getPct(Math.max(...predictions));
+      let highPct = getPct(highVal);
 
-      track.appendChild(createDot(lowPct, Math.min(...predictions), "Low"));
+      track.appendChild(createDot(lowPct, lowVal, "Low"));
       track.appendChild(createDot(avgPct, avgPrice, "Average"));
-      track.appendChild(createDot(highPct, Math.max(...predictions), "High"));
+      track.appendChild(createDot(highPct, highVal, "High"));
 
-      // Current
       if (currentPrice !== "N/A") {
         let curPct = getPct(currentPrice);
         let dotCur = createDot(curPct, currentPrice, "Current", true);
         track.appendChild(dotCur);
 
-        // Slight overlap hack
         let diffToLow = Math.abs(curPct - lowPct);
         let diffToAvg = Math.abs(curPct - avgPct);
         let diffToHigh = Math.abs(curPct - highPct);
@@ -408,9 +375,6 @@
       return container;
     }
 
-    /***************************************************
-     * Helper: create a labeled dot
-     ***************************************************/
     function createDot(percent, priceValue, labelText, isCurrent=false) {
       let fragment = document.createElement("div");
       fragment.style.position = "absolute";
